@@ -5,7 +5,7 @@ import App from './App.tsx'
 import './index.css'
 import "@fontsource/noto-sans"
 
-const match = window.location.pathname.match(/^\/(formfoundry-[^/]+)/)
+const match = window.location.pathname.match(/^\/(formfoundry-[^/]+|form)(?:\/|$)/)
 const basename = match ? `/${match[1]}` : ''
 
 ReactDOM.createRoot(document.getElementById('root')!).render(

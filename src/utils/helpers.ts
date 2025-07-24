@@ -136,7 +136,7 @@ export function getApiUrl(path: string, envVar?: string): string {
       return envVar;
     }
 
-    const match = window.location.pathname.match(/^\/(formfoundry-[^/]+)/);
+    const match = window.location.pathname.match(/^\/(formfoundry-[^/]+|form)(?:\/|$)/);
     const prefix = match ? `/${match[1]}` : "";
   
     // ensure path starts with a slash

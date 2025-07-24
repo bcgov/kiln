@@ -87,6 +87,7 @@ interface Item {
     [key: string]: string | number;
   }
   containerItems?: Item[];
+  attributes?: { [key: string]: any }; // Additional attributes components
 }
 
 /*
@@ -103,6 +104,8 @@ interface Template {
   title: string;
   readOnly?: boolean;
   form_id: string;
+  footer: string;
+  pdf_template_id?: string,
   data: {
     items: Item[];
   };
@@ -122,6 +125,7 @@ interface SavedData {
   data: SavedFieldData;
   form_definition: Template;
   metadata: {};
+  params?:{};
 }
 
 type GroupState = { [key: string]: string }[]; // New type definition
@@ -224,6 +228,58 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
     return () => mediaQueryList.removeEventListener("change", handlePrint);
   }, []);
 
+   //Manage style and script tags for web and pdf
+  function getByType<T extends { type: string; content: string }>(arr: T[] | undefined, type: string): string | undefined {
+    return arr?.find((item) => item.type === type)?.content;
+  }
+
+  const styles = data?.form_definition?.data?.styles;
+  const scripts = data?.form_definition?.data?.scripts;
+
+  const webStyleSheet = getByType(styles, 'web');
+  const pdfStyleSheet = getByType(styles, 'pdf');
+  const webFormScript = getByType(scripts, 'web');
+  const pdfFormScript = getByType(scripts, 'pdf');
+
+  useEffect(() => {
+    const mode = isPrinting ? 'pdf' : 'web';
+    const styleId = `${mode}-form-styles`;
+    const scriptId = `${mode}-form-script`;
+
+    // Remove any existing style/script tags for both modes
+    ['web', 'pdf'].forEach((m) => {
+      const s = document.getElementById(`${m}-form-styles`);
+      if (s) s.remove();
+      const sc = document.getElementById(`${m}-form-script`);
+      if (sc) sc.remove();
+    });
+
+    // Add current mode's style/script if present
+    const styleContent = mode === 'pdf' ? pdfStyleSheet : webStyleSheet;
+    const scriptContent = mode === 'pdf' ? pdfFormScript : webFormScript;
+
+    if (styleContent) {
+      const style = document.createElement('style');
+      style.id = styleId;
+      style.textContent = styleContent;
+      document.head.appendChild(style);
+    }
+    if (scriptContent) {
+      const script = document.createElement('script');
+      script.id = scriptId;
+      script.textContent = scriptContent;
+      document.head.appendChild(script);
+    }
+
+    // Cleanup on unmount
+    return () => {
+      const style = document.getElementById(styleId);
+      if (style) style.remove();
+      const script = document.getElementById(scriptId);
+      if (script) script.remove();
+    };
+  }, [isPrinting, webStyleSheet, pdfStyleSheet, webFormScript, pdfFormScript]);
+
   //on close, execute unlock form
   useEffect(() => {
     const handleClose = (event: BeforeUnloadEvent) => {
@@ -232,8 +288,10 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
         unlockICMFinalFlags();
       }
     }
+    if (mode != "standalone") {
     window.addEventListener("beforeunload", handleClose);
     return () => window.removeEventListener("beforeunload", handleClose);
+    }
   })
 
   /*
@@ -606,6 +664,11 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
 
   }
 
+  const executeFooter = (footer: string) => {
+    const footerFunction = new Function("formStates", "groupStates", footer);
+    return footerFunction(formStates, groupStates);
+  }
+
   const executeCalculatedValueAndSetIfExists = (item: Item, groupId: string | null = null,
     groupIndex: number | null = null): boolean => {
 
@@ -750,7 +813,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
               handleInputChange(fieldId, e.target.value, groupId, groupIndex, item)
             }
             readOnly={formData.readOnly || doesFieldHasCondition("readOnly", item, groupId, groupIndex) || calcValExists || mode == "view"}
-
+            {...item.attributes}
           >
             <Component
               className="field-container no-print"
@@ -765,6 +828,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
               }}
               invalid={!!error}
               invalidText={error || ""}
+              {...item.attributes}
             />
           </InputMask>
             <div className="hidden-on-screen field-wrapper-print" style={{
@@ -819,6 +883,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
                 }}
                 invalid={!!error}
                 invalidText={error || ""}
+              {...item.attributes}
               />}
           >
           </CurrencyInput>
@@ -864,7 +929,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
               readOnly={formData.readOnly || doesFieldHasCondition("readOnly", item, groupId, groupIndex) || calcValExists || mode == "view"}
               invalid={!!error}
               invalidText={error || ""}
-
+              {...item.attributes}
             />
             <div className="hidden-on-screen field-wrapper-print" style={{
               ...(isPrinting ? item.pdfStyles : item.webStyles),
@@ -902,6 +967,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
                 readOnly={formData.readOnly || doesFieldHasCondition("readOnly", item, groupId, groupIndex) || calcValExists || mode == "view"}
                 invalid={!!error}
                 invalidText={error || ""}
+                {...item.attributes}
               />
             </div>
             <div className="hidden-on-screen field-wrapper-print" style={{
@@ -946,6 +1012,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
               readOnly={formData.readOnly || doesFieldHasCondition("readOnly", item, groupId, groupIndex) || calcValExists || mode == "view"}
               invalid={!!error}
               invalidText={error || ""}
+              {...item.attributes}
             />
           </div>
         );
@@ -996,6 +1063,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
               readOnly={formData.readOnly || doesFieldHasCondition("readOnly", item, groupId, groupIndex) || calcValExists || mode == "view"}
               invalid={!!error}
               invalidText={error || ""}
+              {...item.attributes}
 
             >
               <DatePickerInput
@@ -1053,6 +1121,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
               readOnly={formData.readOnly || doesFieldHasCondition("readOnly", item, groupId, groupIndex) || calcValExists || mode == "view"}
               invalid={!!error}
               invalidText={error || ""}
+              {...item.attributes}
             />
             <div className="hidden-on-screen field-wrapper-print text-area" style={{
               ...(isPrinting ? item.pdfStyles : item.webStyles),
@@ -1090,6 +1159,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
             style={{              
               ...(isPrinting ? item.pdfStyles : item.webStyles),
             }}
+            {...item.attributes}
           >
             {item.label}
           </Component>
@@ -1123,6 +1193,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
             }
             invalid={!!error}
             invalidText={error || ""}
+            {...item.attributes}
           />
         );
       case "text-info":
@@ -1136,12 +1207,13 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
             key={fieldId}
             id={fieldId}
             dangerouslySetInnerHTML={{ __html: parseDynamicText(textInfo) }}
+            {...item.attributes}
           />
 
         );
       case "link":
         return (
-          <Component id={fieldId} href={item.value} onClick={handleLinkClick}>
+          <Component id={fieldId} href={item.value} onClick={handleLinkClick} {...item.attributes}>
             {item.label}
           </Component>
         );
@@ -1161,6 +1233,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
               disabled={false}
               iconDescription="Delete file"
               name=""
+              {...item.attributes}
             />
           </div>
         );
@@ -1172,6 +1245,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
             initialRows={item.initialRows}
             initialColumns={item.initialColumns}
             initialHeaderNames={item.initialHeaderNames}
+            {...item.attributes}
           />
         );
       case "radio":
@@ -1207,6 +1281,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
                 readOnly={formData.readOnly || doesFieldHasCondition("readOnly", item, groupId, groupIndex) || calcValExists || mode == "view"}
                 invalid={!!error}
                 invalidText={error || ""}
+                {...item.attributes}
               >
 
                 {radioOptions.map((option, index) => (
@@ -1264,6 +1339,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
 
               invalid={!!error}
               invalidText={error || ""}
+              {...item.attributes}
             >
               <SelectItem value="" text="" />
               {itemsForSelect.map((itemForSelect) => (
@@ -1298,7 +1374,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
                 {item.repeater && (<div className="group-item-header">
                   {item.repeaterItemLabel || item.label}
                   {(item.repeaterItemLabel || item.label) && ` ${groupIndex + 1}`}
-                  {item.groupItems && item.groupItems.length > 1 && (mode == "edit" || goBack) && formData.readOnly != true && (
+                  {item.groupItems && item.groupItems.length > 1 && (mode == "edit" || goBack || mode == "standalone") && formData.readOnly != true && (
                     <div className="custom-buttons-no-bg no-print">
                       <Button
                         kind="ghost"
@@ -1344,7 +1420,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
                 </div>
               </div>
             ))}
-            {item.repeater && (mode == "edit" || goBack) && formData.readOnly != true && (
+            {item.repeater && (mode == "edit" || goBack || mode == "standalone") && formData.readOnly != true && (
               <div className="custom-buttons-only">
                 <Button
                   kind="ghost"
@@ -1362,7 +1438,14 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
 
         return (
           <>
-            <div key={item.id} className="common-container">
+            <div key={item.id}
+              id={item.id}
+              className={item?.attributes?.containerType == 'page' ? "page-container" : item?.attributes?.containerType == 'section' ? "section-container" : "common-container"}
+              style={{
+                ...(isPrinting ? item.pdfStyles : item.webStyles),
+              }}
+              {...item.attributes}
+            >
               <div className="group-header"
                 style={{
                   display: 'flex',
@@ -1457,6 +1540,49 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
     return savedData;
   };
 
+  const buildPdfPayload = () => {
+    const payload: Record<string, any> = {};
+  
+    // recursively walk items 
+    const processItems = (items: Item[]) => {
+      items.forEach(item => {
+        // skip anything hidden
+        if (!isFieldVisible(item)) return;
+  
+        if (item.type === "container" && item.containerItems) {
+          // dive into container
+          processItems(item.containerItems);
+  
+        } else if (item.type === "group") {
+          // only include the group itself if it's visible
+          const rows = (groupStates[item.id] || [])
+            .map((rowState, rowIndex) => {
+              const rowPayload: Record<string, any> = {};
+              item.groupItems?.[rowIndex]?.fields.forEach(f => {
+                if (isFieldVisible(f, item.id, rowIndex)) {
+                  rowPayload[f.id] = rowState[f.id];
+                }
+              });
+              return rowPayload;
+            })
+            .filter(r => Object.keys(r).length > 0);
+  
+          if (rows.length) {
+            payload[item.id] = rows;
+          }
+  
+        } else {
+          // simple field
+          payload[item.id] = formStates[item.id];
+        }
+      });
+    };
+  
+    processItems(formData.data.items);
+  
+    return { data: payload };
+  };
+
 
   /*
   Endpoint for 'Save' and 'Save and Close'
@@ -1466,8 +1592,8 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
   const saveDataToICMApi = async () => {
     try {
       const saveDataICMEndpoint = API.saveICMData;
-      const state = window.history.state as { formParams?: Record<string,string> };
-      const params = state?.formParams ?? {};
+      const state = sessionStorage.getItem("formParams");
+      const params = state ? (JSON.parse(state) as Record<string,string>) : {};
       const token = keycloak?.token ?? null;
       const savedJson: Record<string, any> = {
         "attachmentId": params["attachmentId"],
@@ -1498,8 +1624,10 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
         console.log("Result ", result);
         return "success";
       } else {
-        console.error("Error:", response.statusText);
-        return "failed";
+        const errorData = await response.json(); // Parse error response        
+        //throw new Error(errorData.error || "Something went wrong");
+        console.error("Error:",errorData.error);
+        return errorData?.error || "Error saving form. Please try again.";
       }
     } catch (error) {
       console.error("Error:", error);
@@ -1507,6 +1635,45 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
     }
   };
 
+  const saveDataToICMForGenerate = async () => {
+    try {
+      const saveDataICMEndpoint = API.saveICMData;
+     
+      const savedJson: Record<string, any> = {
+        "attachmentId": data.params.attachmentId,
+        "OfficeName": data.params.OfficeName,
+        "username": data.params.username,
+        //"username": "test",
+        "savedForm": JSON.stringify(createSavedData())
+      };
+            
+      const originalServer = new URL(data.params.apiHost).hostname;
+
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+        ...(originalServer && { "X-Original-Server": originalServer })
+      };  
+
+      const response = await fetch(saveDataICMEndpoint, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(savedJson),
+      });
+      if (response.ok) {
+        const result = await response.json();
+        console.log("Result ", result);
+        return "success";
+      } else {
+        const errorData = await response.json(); // Parse error response        
+        //throw new Error(errorData.error || "Something went wrong");
+        console.error("Error:",errorData.error);
+        return errorData?.error || "Error saving form. Please try again.";
+      }
+    } catch (error) {
+      console.error("Error:", error);
+      return "failed";
+    }
+  };
 
   /*
   Function for validating all fields before saving . This function will iterate through
@@ -1572,8 +1739,8 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
     try {
 
       const unlockICMFinalEdpoint = API.unlockICMData;
-      const state = window.history.state as { formParams?: Record<string,string> };
-      const params = state?.formParams ?? {};
+      const state = sessionStorage.getItem("formParams");
+      const params = state ? (JSON.parse(state) as Record<string,string>) : {};
       const token = keycloak?.token ?? null;
 
       const body: Record<string, any> = { ...params };
@@ -1620,13 +1787,13 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
     setModalOpen(false); // Ensure modal is closed when a new request starts
     try {
       if (validateAllFields()) {
-        const returnMessage = saveDataToICMApi();
-        if ((await returnMessage) === "success") {
+        const returnMessage =await saveDataToICMApi();
+        if ((returnMessage) === "success") {
           setModalTitle("Success ✅");
           setModalMessage("Form Saved Successfully.");
         } else {
           setModalTitle("Error ❌ ");
-          setModalMessage("Error saving form. Please try again.");
+          setModalMessage(returnMessage);
         }
         setModalOpen(true);
       } else {
@@ -1656,8 +1823,8 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
     setModalOpen(false); // Ensure modal is closed when a new request starts
     try {
       if (validateAllFields()) {
-        const returnMessage = saveDataToICMApi();
-        if ((await returnMessage) === "success") {
+        const returnMessage = await saveDataToICMApi();
+        if ((returnMessage) === "success") {
           const unlockMessage = unlockICMFinalFlags();
           if ((await unlockMessage) == "success") {
             isFormCleared.current = true;
@@ -1672,7 +1839,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
           }
         } else {
           setModalTitle("Error ❌");
-          setModalMessage("Error saving form. Please try again.");
+          setModalMessage(returnMessage);
           setModalOpen(true);
         }
       } else {
@@ -1696,8 +1863,42 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
   */
 
   const handlePrint = async () => {
-    try {
+    
+    const pdfId = formData.pdf_template_id;
+    const PDFTemplateEndpoint = API.pdfTemplate;
 
+    if (pdfId) {
+      try {
+        const downloadUrl = `${PDFTemplateEndpoint}/${pdfId}`;
+        const payload = buildPdfPayload();
+
+        const response = await fetch(downloadUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+
+        if (!response.ok) {
+          throw new Error(`Failed to fetch PDF (${response.status})`);
+        }
+
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `${formData.form_id}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+
+        return;
+      } catch (err) {
+        console.warn("PDF ‐ template download failed, falling back to HTML print:", err);
+      }
+    }
+
+    try {
       const originalTitle = document.title;
       document.title = formData.form_id || 'CustomFormName';
       // Create metadata elements
@@ -1721,10 +1922,10 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
 
       setIsPrinting(true); // Force printing mode
       document.body.offsetHeight; // Force reflow
-      const extraFooterInfo = formStates["footerExtraInfo"];
+      const extraFooterInfo = executeFooter(formData.footer);
       const formFooter = formData?.form_id && formData?.title
-  ? formData.form_id + " - " + formData.title + (extraFooterInfo ? " - " + extraFooterInfo : "")
-  : "Unknown Form ID";
+        ? formData.form_id + " - " + formData.title + (extraFooterInfo ? " - " + extraFooterInfo : "")
+        : "Unknown Form ID";
     
         // Set these values as attributes on the <body> tag
       document.documentElement.setAttribute("data-form-id", formFooter);
@@ -1797,6 +1998,31 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
     });
   };
 
+  const handleGenerate = async () => {
+    setIsLoading(true); // Show loading overlay
+    setModalOpen(false); // Ensure modal is closed when a new request starts
+    try {      
+        const returnMessage =await saveDataToICMForGenerate();
+        if ((returnMessage) === "success") {
+          setModalTitle("Success ✅");
+          setModalMessage("Form Saved Successfully.");
+        } else {
+          setModalTitle("Error ❌ ");
+          setModalMessage(returnMessage);
+        }
+        setModalOpen(true);
+      
+    } catch (error) {
+      setModalTitle("Error ❌ ");
+      setModalMessage("Error saving form. Please try again.");
+      setModalOpen(true);
+    }
+    finally {
+      setIsLoading(false); // Hide loading overlay once request completes
+    }
+
+  };
+
   return (
 
     <div ref={pdfContainerRef} className="full-frame">
@@ -1820,10 +2046,17 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
                   <Button onClick={handleSave} kind="secondary" className="no-print">
                     Save
                   </Button>
-                  <Button onClick={handleSaveAndClose} kind="secondary" className="no-print">
+                  <Button onClick={handleSaveAndClose} kind="secondary" className="no-print" id="saveAndClose">
                     Save And Close
                   </Button>
 
+                </>
+              )}
+              {mode == "generate" && (
+                <>
+                  <Button onClick={handleGenerate} kind="secondary" className="no-print" id="generate">
+                    Generate
+                  </Button>                  
                 </>
               )}
               {goBack && (

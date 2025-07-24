@@ -15,25 +15,31 @@ const NewFormPage: React.FC = () => {
 
   useEffect(() => {
 
-    const queryParams = new URLSearchParams(window.location.search);
-    const params = Object.fromEntries(queryParams.entries()) as Record<string,string>;
+    const { search, pathname } = window.location;
 
-
-    if (params) {
-
+    if (search) {
+      const params = Object.fromEntries(new URLSearchParams(search).entries()) as Record<string, string>;
+      sessionStorage.setItem("formParams", JSON.stringify(params));
       handleGenerateTemplate(params);
-      
-      const cleanUrl = window.location.origin + window.location.pathname;
-      window.history.replaceState(
-        { formParams: params },   
-        document.title,
-        cleanUrl
-      );
-
+      window.history.replaceState({}, document.title, pathname);
+    }
+    else {
+      const stored = sessionStorage.getItem("formParams");
+      if (stored) {
+        const params = JSON.parse(stored) as Record<string, string>;
+        handleGenerateTemplate(params);
+      }
     }
 
 
   }, []);
+
+  function getCookie(name: string): string | null {
+    const match = document.cookie.match(
+      new RegExp('(?:^|; )' + name.replace(/([.$?*|{}()[\]\\/+^])/g, '\\$1') + '=([^;]*)')
+    );
+    return match ? decodeURIComponent(match[1]) : null;
+  }
 
   const handleGenerateTemplate = async (params: { [key: string]: string | null }) => {
     setIsNewPageLoading(true);
@@ -48,21 +54,25 @@ const NewFormPage: React.FC = () => {
       if (token) {
         body.token = token;
       } else {
-        const usernameMatch = document.cookie.match(/(?:^|;\s*)username=([^;]+)/);
-        const username = usernameMatch ? decodeURIComponent(usernameMatch[1]).trim() : null;
-
-        if (username && username.length > 0) {
-          body.username = username;
+        const username = getCookie("username");
+        if (username) {
+          body.username = username.trim();
         }
       }
 
+      const originalServer = getCookie("originalServer");
+      
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+        ...(originalServer ? { "X-Original-Server": originalServer } : {})
+      };
+
       const response = await fetch(generateDataEndpoint, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers,
         body: JSON.stringify(body),
       });
+
       if (!response.ok) {
         const errorData = await response.json(); // Parse error response        
         throw new Error(errorData.error || "Something went wrong");

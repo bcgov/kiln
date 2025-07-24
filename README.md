@@ -16,7 +16,7 @@ It is developed using Carbon/React + TypeScript + Vite
 - Clone the repository:
 
 ```
-git clone https://github.com/kiiskila-bcgov/kiln.git
+git clone https://github.com/bcgov/kiln.git
 
 ```
 
@@ -30,9 +30,17 @@ npm install
 
 ```
 cp .env.example .env
+
+### Docker Deployment 
+
+Have Docker installed and running. Run the following commands for local deployment:
+
+```
+docker-compose up --build
+
 ```
 
-### Executing program
+### Executing program (Not valid anymore)
 
 - From the command line, start the server
 
