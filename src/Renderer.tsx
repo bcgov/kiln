@@ -43,91 +43,11 @@ import {
 /*creating the structure of object Item. 
 All the form elements coming in the json will of the format type Item.
 Optional attributes are denied with ?
-Typescript requires the type  to be defined*/
-interface Item {
-  type: string;
-  label?: string;
-  placeholder?: string;
-  id: string;
-  mask?: string;
-  codeContext?: { name: string };
-  header?: string;
-  offText?: string;
-  onText?: string;
-  size?: string;
-  listItems?: { value: string; text: string }[];
-  groupItems?: { fields: Item[] }[];
-  repeater?: boolean;
-  clear_button?: boolean;
-  labelText: string;
-  helperText?: string;
-  value?: string;
-  filenameStatus?: string;
-  labelDescription?: string;
-  initialRows?: string;
-  initialColumns?: string;
-  initialHeaderNames?: string;
-  repeaterItemLabel?: string;
-  validation?: {
-    type: string;
-    value: string | number | boolean;
-    errorMessage: string;
-  }[];
-  //saveOnSubmit?:boolean;
-  //readOnly?:boolean;
-  conditions?: {
-    type: string;
-    value: string;
-  }[];
-  webStyles?: {
-    [key: string]: string | number;
-  };
-
-  pdfStyles?: {
-    [key: string]: string | number;
-  }
-  containerItems?: Item[];
-}
-
-/*
-creating the structure of object Template. 
-Template object is the form definition part of the json.
-Items will be like a subset that is used to represnt the elements or form fields in the form.
-*/
-
-interface Template {
-  version: string;
-  ministry_id: string;
-  id: string;
-  lastModified: string;
-  title: string;
-  readOnly?: boolean;
-  form_id: string;
-  footer: string;
-  pdf_template_id?: string,
-  data: {
-    items: Item[];
-  };
-}
-
-interface SavedFieldData {
-  [key: string]: FieldValue | GroupFieldValueItem[]; // The key can either point to a single field value or an array of group items
-}
-
-type FieldValue = string | boolean | number | { [key: string]: any }; // The value can be of various types, including nested objects
-
-interface GroupFieldValueItem {
-  [key: string]: FieldValue; // Each group item is a map of field IDs to field values
-}
-
-interface SavedData {
-  data: SavedFieldData;
-  form_definition: Template;
-  metadata: {};
-  params?:{};
-}
-
-type GroupState = { [key: string]: string }[]; // New type definition
+Typescript requires the type  to be defined*/  
+import { Template, GroupState,
+  Item, SavedFieldData, FieldValue, SavedData,
+  InterfaceElement} from "./types/template";
+import ButtonRenderer from "./common/ButtonRenderer";
 
 /*
 Each type of fields should be defined in th component mapping
@@ -235,7 +155,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
         unlockICMFinalFlags();
       }
     }
-    if (mode != "standalone") {
+    if (mode != "portal") {
     window.addEventListener("beforeunload", handleClose);
     return () => window.removeEventListener("beforeunload", handleClose);
     }
@@ -1308,7 +1228,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
                 {item.repeater && (<div className="group-item-header">
                   {item.repeaterItemLabel || item.label}
                   {(item.repeaterItemLabel || item.label) && ` ${groupIndex + 1}`}
-                  {item.groupItems && item.groupItems.length > 1 && (mode == "edit" || goBack || mode == "standalone") && formData.readOnly != true && (
+                  {item.groupItems && item.groupItems.length > 1 && (mode == "edit" || goBack || mode == "portal") && formData.readOnly != true && (
                     <div className="custom-buttons-no-bg no-print">
                       <Button
                         kind="ghost"
@@ -1354,7 +1274,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
                 </div>
               </div>
             ))}
-            {item.repeater && (mode == "edit" || goBack || mode == "standalone") && formData.readOnly != true && (
+            {item.repeater && (mode == "edit" || goBack || mode == "portal") && formData.readOnly != true && (
               <div className="custom-buttons-only">
                 <Button
                   kind="ghost"
@@ -1882,6 +1802,73 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
     }
   };
 
+  const onButtonClick =  async (buttonConfig: InterfaceElement)  => {
+    // This is your parent-level logic
+    console.log("Button clicked:", buttonConfig.label);
+    console.log("Current form data:", buttonConfig);
+    // Perhaps call the backend, show a notification, etc.
+   
+    setIsLoading(true); // Show loading overlay
+    setModalOpen(false); // Ensure modal is closed when a new request starts
+    try {
+      if (validateAllFields()) {
+        const returnMessage =await submitForButtonAction(buttonConfig);
+        if ((returnMessage) === "success") {
+          setModalTitle("Success ✅");
+          setModalMessage("Form Saved Successfully.");
+        } else {
+          setModalTitle("Error ❌ ");
+          setModalMessage(returnMessage);
+        }
+        setModalOpen(true);
+      } else {
+        setModalTitle("Validation Error ❌ ");
+        setModalMessage("Error saving form. Please clear the errors in the form before saving.");
+        setModalOpen(true);
+      }
+    } catch (error) {
+      setModalTitle("Error ❌ ");
+      setModalMessage("Error saving form. Please try again.");
+      setModalOpen(true);
+    }
+    finally {
+      setIsLoading(false); // Hide loading overlay once request completes
+    }
+  };
+
+    const submitForButtonAction = async (buttonConfig: InterfaceElement) => {
+    try {
+      const submitForActionEndpoint = API.submitForButtonAction;
+      const state = sessionStorage.getItem("formParams");
+      const params = state ? (JSON.parse(state) as Record<string,string>) : {};
+      const savedJson: Record<string, any> = {
+        "tokenId": params["id"],        
+        "savedForm": JSON.stringify(createSavedData()),
+        "config":buttonConfig
+      };      
+
+      const response = await fetch(submitForActionEndpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(savedJson),
+      });
+      if (response.ok) {
+        const result = await response.json();
+        console.log("Result ", result);
+        return "success";
+      } else {
+        const errorData = await response.json(); // Parse error response        
+        //throw new Error(errorData.error || "Something went wrong");
+        console.error("Error:",errorData.error);
+        return errorData?.error || "Error saving form. Please try again.";
+      }
+    } catch (error) {
+      console.error("Error:", error);
+      return "failed";
+    }
+  };
 
   const ministryLogoPath = useHref(`/ministries/${formData.ministry_id}.png`);
 
@@ -1983,11 +1970,23 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
                   </Button>                  
                 </>
               )}
+              {(mode == "portal" || goBack)  && formData.interface && (
+              <div className="header-buttons-only no-print"> 
+                {formData.interface?.map((btn: any, idx: any) => (
+                  <ButtonRenderer
+                      key={idx}
+                      config={btn}
+                      onButtonClick={onButtonClick} // Now matches single-arg signature
+                    />
+                ))}      
+              </div>
+            )}
               {goBack && (
                 <Button onClick={goBack} kind="secondary" className="no-print">
                   Back
                 </Button>
               )}
+              
               <Button kind="secondary" onClick={handlePrint} className="no-print">
                 Print
               </Button>
@@ -2041,7 +2040,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
                   {renderComponent(item)}
                 </div>
               ))}
-            </Row>
+            </Row>            
           </FlexGrid>
         </div>
       </div>

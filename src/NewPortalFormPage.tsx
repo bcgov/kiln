@@ -13,7 +13,7 @@ const NewPortalFormPage: React.FC = () => {
   const [isNewPageLoading, setIsNewPageLoading] = useState(false);
 
   useEffect(() => {
-    console.log("for new endpoint in useeffect");
+    console.log("for new endpoint in useeffect here");
     //
      const { search, pathname } = window.location;
 
@@ -72,6 +72,7 @@ const NewPortalFormPage: React.FC = () => {
       } else {
         const result = await response.json();
         setJsonContent(result.save_data);
+        console.log("saveData",result.save_data);
       }
 
     } catch (error) {
@@ -86,7 +87,7 @@ const NewPortalFormPage: React.FC = () => {
   return (
     <>
       <LoadingOverlay isLoading={isNewPageLoading} message="Please wait while the form is being loaded." />
-      <Presenter data={jsonContent} mode="standalone" />
+      <Presenter data={jsonContent} mode="portal" />
     </>
   );
 };

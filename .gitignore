@@ -27,3 +27,4 @@ test-results
 *.sw?
 .env
 *.code-workspace
+FormFoundry.code-workspace
