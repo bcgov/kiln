@@ -16,6 +16,10 @@ const _kc: KeycloakInstance = new Keycloak({
     url: import.meta.env.VITE_SSO_AUTH_SERVER_URL as string,
     realm: import.meta.env.VITE_SSO_REALM as string,
     clientId: import.meta.env.VITE_SSO_CLIENT_ID as string,
+    //url: "http://localhost:8080",
+    //realm: "master",
+    //clientId: "dev-client"
+
 });
 
 // Initialize Keycloak and return the instance if authenticated.
