@@ -13,7 +13,7 @@ const NewPortalFormPage: React.FC = () => {
   const [isNewPageLoading, setIsNewPageLoading] = useState(false);
 
   useEffect(() => {
-    console.log("for new endpoint in useeffect");
+    console.log("for new endpoint in useeffect here");
     //
      const { search, pathname } = window.location;
 
@@ -29,41 +29,31 @@ const NewPortalFormPage: React.FC = () => {
         const params = JSON.parse(stored) as Record<string,string>;
         handleGenerateTemplate(params);
       }}
-
-    //
-
-    /*const queryParams = new URLSearchParams(window.location.search);
-    const params: { [key: string]: string | null } = {};
-
-    // Iterate over all query parameters and store them in the params object
-    queryParams.forEach((value, key) => {
-      params[key] = value;
-    });
-
-    if (params) {
-
-      handleGenerateTemplate(params);
-    }*/
-
-
   }, []);
+
+  function getCookie(name: string): string | null {
+    const match = document.cookie.match(
+      new RegExp('(?:^|; )' + name.replace(/([.$?*|{}()[\]\\/+^])/g, '\\$1') + '=([^;]*)')
+    );
+    return match ? decodeURIComponent(match[1]) : null;
+  }
 
   const handleGenerateTemplate = async (params: { [key: string]: string | null }) => {
     setIsNewPageLoading(true);
 
     try {
-       console.log("for new endpoint in handleGenerateTemplate befoire");
-      const generateDataEndpoint = API.generatePortalForm;
-     
-      console.log("for new endpoint in handleGenerateTemplate");
+      const generateDataEndpoint = API.generatePortalForm;       
       const body: Record<string, any> = { ...params };
-
+      const originalServer = getCookie("originalServer");
+      
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+        ...(originalServer ? { "X-Original-Server": originalServer } : {})
+      };
      
       const response = await fetch(generateDataEndpoint, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers,
         body: JSON.stringify(body),
       });
       if (!response.ok) {
@@ -71,7 +61,7 @@ const NewPortalFormPage: React.FC = () => {
         throw new Error(errorData.error || "Something went wrong");
       } else {
         const result = await response.json();
-        setJsonContent(result.save_data);
+        setJsonContent(result.save_data);        
       }
 
     } catch (error) {
@@ -86,7 +76,7 @@ const NewPortalFormPage: React.FC = () => {
   return (
     <>
       <LoadingOverlay isLoading={isNewPageLoading} message="Please wait while the form is being loaded." />
-      <Presenter data={jsonContent} mode="standalone" />
+      <Presenter data={jsonContent} mode="portal" />
     </>
   );
 };

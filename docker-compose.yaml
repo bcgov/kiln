@@ -12,6 +12,7 @@ services:
         VITE_COMM_API_SAVEDATA_ICM_ENDPOINT_URL: http://host.docker.internal:3030/saveICMData
         VITE_COMM_API_LOADDATA_ICM_ENDPOINT_URL: http://host.docker.internal:3030/loadICMData
         VITE_COMM_API_UNLOCK_ICM_FORM_URL: http://host.docker.internal:3030/clearICMLockedFlag
+        VITE_COMM_API_GENERATE_PORTAL_FORM_ENDPOINT_URL: http://host.docker.internal:3030/generatePortalForm
         VITE_TEMPLATE_REPO_URL: http://host.docker.internal:3000
         VITE_KLAMM_URL: http://host.docker.internal:8000
         VITE_SSO_REDIRECT_URI: http://localhost:8080
