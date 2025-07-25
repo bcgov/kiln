@@ -9,17 +9,18 @@ import { InterfaceElement } from '../types/template';
 interface ButtonRendererProps {
   config: InterfaceElement;
   onButtonClick: (config: InterfaceElement) => void;
+  disabled?: boolean;
 }
 
-const ButtonRenderer: React.FC<ButtonRendererProps> = ({ config, onButtonClick }) => {
+const ButtonRenderer: React.FC<ButtonRendererProps> = ({ config, onButtonClick, disabled  }) => {
   const handleClick = () => {
-    onButtonClick(config); // Pass only the button config
-    window.alert("here");
+    if (disabled) return;
+    onButtonClick(config); // Pass only the button config    
   };
 
   return (                  
           <>
-            <Button onClick={handleClick} kind="secondary" className="no-print">
+            <Button onClick={handleClick} kind="secondary" className="no-print" disabled={disabled}>
               {config.label}
             </Button>        
 

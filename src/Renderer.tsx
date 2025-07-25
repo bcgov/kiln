@@ -2051,7 +2051,8 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
                   <ButtonRenderer
                       key={idx}
                       config={btn}
-                      onButtonClick={onButtonClick} // Now matches single-arg signature
+                      onButtonClick={onButtonClick}
+                      disabled={typeof goBack === 'function'}   // Now matches single-arg signature
                     />
                 ))}      
               </div>

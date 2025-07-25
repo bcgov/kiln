@@ -38,6 +38,7 @@ export interface Item {
     [key: string]: string | number;
   };
   containerItems?: Item[];
+  attributes?: { [key: string]: any }; // Additional attributes components
 }
 
 export interface EndpointAction {
