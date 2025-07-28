@@ -52,11 +52,23 @@ const server = http.createServer((req, res) => {
   if (
     pathname.match(/\.(js|css|png|jpg|gif|svg|ico|ttf|woff|woff2|map|json)$/)
   ) {
-    let filePath = path.join(distPath, pathname);
+    let filePath = path.resolve(distPath, `.${pathname}`);
+
+    // Ensure the resolved filePath is within the distPath directory
+    if (!filePath.startsWith(distPath)) {
+      res.writeHead(403);
+      res.end("Forbidden");
+      return;
+    }
 
     // If the file doesn't exist at the direct path, try without /preview prefix
     if (!fs.existsSync(filePath) && pathname.startsWith("/preview/")) {
-      filePath = path.join(distPath, pathname.substring("/preview".length));
+      filePath = path.resolve(distPath, `.${pathname.substring("/preview".length)}`);
+      if (!filePath.startsWith(distPath)) {
+        res.writeHead(403);
+        res.end("Forbidden");
+        return;
+      }
     }
 
     if (fs.existsSync(filePath)) {
