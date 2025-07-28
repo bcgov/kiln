@@ -2,6 +2,7 @@ import http from "http";
 import fs from "fs";
 import path from "path";
 import url from "url";
+import process from "process";
 
 const port = 8080;
 import { fileURLToPath } from "url";
@@ -10,6 +11,15 @@ import { dirname } from "path";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const distPath = path.join(__dirname, "dist");
+
+// Resolve symlinks in distPath once at startup
+let resolvedDistPath;
+try {
+  resolvedDistPath = fs.realpathSync(distPath);
+} catch (err) {
+  console.error("Failed to resolve dist directory:", err);
+  process.exit(1);
+}
 
 // MIME types mapping
 const mimeTypes = {
@@ -53,32 +63,56 @@ const server = http.createServer((req, res) => {
     pathname.match(/\.(js|css|png|jpg|gif|svg|ico|ttf|woff|woff2|map|json)$/)
   ) {
     let filePath = path.resolve(distPath, `.${pathname}`);
+    let resolvedFilePath;
+    try {
+      resolvedFilePath = fs.realpathSync(filePath);
+    } catch (err) {
+      res.writeHead(404);
+      res.end("File not found");
+      return;
+    }
 
-    // Ensure the resolved filePath is within the distPath directory
-    if (!filePath.startsWith(distPath)) {
+    // Ensure the resolved filePath is within the resolvedDistPath directory
+    if (
+      resolvedFilePath !== resolvedDistPath &&
+      !resolvedFilePath.startsWith(resolvedDistPath + path.sep)
+    ) {
       res.writeHead(403);
       res.end("Forbidden");
       return;
     }
 
     // If the file doesn't exist at the direct path, try without /preview prefix
-    if (!fs.existsSync(filePath) && pathname.startsWith("/preview/")) {
-      filePath = path.resolve(distPath, `.${pathname.substring("/preview".length)}`);
-      if (!filePath.startsWith(distPath)) {
+    if (!fs.existsSync(resolvedFilePath) && pathname.startsWith("/preview/")) {
+      filePath = path.resolve(
+        distPath,
+        `.${pathname.substring("/preview".length)}`
+      );
+      try {
+        resolvedFilePath = fs.realpathSync(filePath);
+      } catch (err) {
+        res.writeHead(404);
+        res.end("File not found");
+        return;
+      }
+      if (
+        resolvedFilePath !== resolvedDistPath &&
+        !resolvedFilePath.startsWith(resolvedDistPath + path.sep)
+      ) {
         res.writeHead(403);
         res.end("Forbidden");
         return;
       }
     }
 
-    if (fs.existsSync(filePath)) {
-      const ext = path.extname(filePath);
+    if (fs.existsSync(resolvedFilePath)) {
+      const ext = path.extname(resolvedFilePath);
       const mimeType = mimeTypes[ext] || "application/octet-stream";
 
       res.setHeader("Content-Type", mimeType);
       res.setHeader("Cache-Control", "public, max-age=31536000");
 
-      const fileStream = fs.createReadStream(filePath);
+      const fileStream = fs.createReadStream(resolvedFilePath);
       fileStream.pipe(res);
 
       fileStream.on("error", (err) => {
