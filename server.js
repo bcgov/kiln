@@ -74,7 +74,11 @@ const server = http.createServer((req, res) => {
 
     // Robust containment check: ensure resolvedFilePath is inside resolvedDistPath
     const relative = path.relative(resolvedDistPath, resolvedFilePath);
-    if (relative.startsWith("..") || path.isAbsolute(relative)) {
+    if (
+      relative.startsWith("..") || 
+      path.isAbsolute(relative) || 
+      !resolvedFilePath.startsWith(resolvedDistPath + path.sep)
+    ) {
       res.writeHead(403);
       res.end("Forbidden");
       return;
@@ -96,8 +100,9 @@ const server = http.createServer((req, res) => {
       // Robust containment check: ensure resolvedFilePath is inside resolvedDistPath
       const relativePreview = path.relative(resolvedDistPath, resolvedFilePath);
       if (
-        relativePreview.startsWith("..") ||
-        path.isAbsolute(relativePreview)
+        relativePreview.startsWith("..") || 
+        path.isAbsolute(relativePreview) || 
+        !resolvedFilePath.startsWith(resolvedDistPath + path.sep)
       ) {
         res.writeHead(403);
         res.end("Forbidden");
