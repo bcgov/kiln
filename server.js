@@ -72,11 +72,9 @@ const server = http.createServer((req, res) => {
       return;
     }
 
-    // Ensure the resolved filePath is within the resolvedDistPath directory
-    if (
-      resolvedFilePath !== resolvedDistPath &&
-      !resolvedFilePath.startsWith(resolvedDistPath + path.sep)
-    ) {
+    // Robust containment check: ensure resolvedFilePath is inside resolvedDistPath
+    const relative = path.relative(resolvedDistPath, resolvedFilePath);
+    if (relative.startsWith("..") || path.isAbsolute(relative)) {
       res.writeHead(403);
       res.end("Forbidden");
       return;
@@ -95,9 +93,11 @@ const server = http.createServer((req, res) => {
         res.end("File not found");
         return;
       }
+      // Robust containment check: ensure resolvedFilePath is inside resolvedDistPath
+      const relativePreview = path.relative(resolvedDistPath, resolvedFilePath);
       if (
-        resolvedFilePath !== resolvedDistPath &&
-        !resolvedFilePath.startsWith(resolvedDistPath + path.sep)
+        relativePreview.startsWith("..") ||
+        path.isAbsolute(relativePreview)
       ) {
         res.writeHead(403);
         res.end("Forbidden");
