@@ -3,6 +3,7 @@ export interface Item {
   label?: string;
   placeholder?: string;
   id: string;
+  class?: string;
   mask?: string;
   codeContext?: { name: string };
   header?: string;
@@ -89,7 +90,7 @@ export interface Template {
   data: {
     items: Item[];
   };
-  interface?: InterfaceElement[];  
+  interface?: InterfaceElement[];
 }
 
 export interface SavedFieldData {

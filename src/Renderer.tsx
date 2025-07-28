@@ -7,6 +7,7 @@ import { useHref } from 'react-router-dom';
 import CustomModal from "./common/CustomModal"; // Import the modal component
 import LoadingOverlay from "./common/LoadingOverlay";
 import { AuthenticationContext } from "./App";
+import { useExternalState } from "./hooks/ExternalStateHook";
 import {
   TextInput,
   Dropdown,
@@ -31,6 +32,7 @@ import { FlexGrid } from "@carbon/react";
 import { Add, TrashCan  } from '@carbon/icons-react';
 import InputMask from "react-input-mask";
 import { CurrencyInput } from "react-currency-mask";
+import filterInvalidDOMProps from 'filter-invalid-dom-props';
 import { API } from "./utils/api";
 import {
   generateUniqueId,
@@ -39,6 +41,10 @@ import {
   isFieldRequired,
 
 } from "./utils/helpers"; // Import from the helpers file
+import {
+  createFieldRegistration,
+  registerAllFields as registerAllFieldsUtil,
+} from "./utils/context";
 
 /*creating the structure of object Item. 
 All the form elements coming in the json will of the format type Item.
@@ -87,6 +93,7 @@ interface RendererProps {
 
 
 const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
+  const { store } = useExternalState();
 
   /*
   the states of the field ouside of the group will be saved in formStates
@@ -108,6 +115,32 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
   const [modalTitle, setModalTitle] = useState("KILN");
   const [modalMessage, setModalMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+
+  // Create Initial field registration in external store
+  const createFieldRegistrationWrapper = (fieldId: string, groupId?: string, groupIndex?: number) => {
+    return createFieldRegistration({
+      fieldId,
+      groupId,
+      groupIndex,
+      store,
+      formData,
+      groupStates,
+      formStates,
+      setFormErrors,
+      handleInputChange,
+      validateField,
+    });
+  };
+
+  // Register all fields with the external store
+  const registerAllFields = (items: Item[], parentGroupId?: string, parentGroupIndex?: number) => {
+    registerAllFieldsUtil({
+      items,
+      parentGroupId,
+      parentGroupIndex,
+      createFieldRegistration: createFieldRegistrationWrapper,
+    });
+  };
 
   if (!data.form_definition) {
     return <div>Invalid Form</div>;
@@ -199,19 +232,23 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
     };
   }, [isPrinting, webStyleSheet, pdfStyleSheet, webFormScript, pdfFormScript]);
 
+  const isStandaloneMode = mode === "standalone" || import.meta.env.VITE_STANDALONE_MODE === "true";
+
   //on close, execute unlock form
   useEffect(() => {
+    if (isStandaloneMode) return;
+
     const handleClose = (event: BeforeUnloadEvent) => {
       if (isFormCleared.current === false) {
         event.preventDefault();
         unlockICMFinalFlags();
       }
     }
-    if (mode != "portal") {
+    if (mode != "standalone" && mode != "portal") {
     window.addEventListener("beforeunload", handleClose);
     return () => window.removeEventListener("beforeunload", handleClose);
     }
-  })
+  }, [isStandaloneMode]);
 
   /*
   Initialization on page load
@@ -219,6 +256,10 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
   Some attributes need to be set for paging for PDF generation
   */
   useEffect(() => {
+    store.clearRegistrations();
+    // Update formData when new data is received
+    setFormData(JSON.parse(JSON.stringify(data.form_definition)));
+    
     const initialFormStates: { [key: string]: string } = {};
     const initialGroupStates: { [key: string]: GroupState } = {}; // Changed type here   
 
@@ -236,11 +277,40 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
           initialGroupStates[item.id] =
             item.groupItems?.map((groupItem, groupIndex) => {
               const groupState: { [key: string]: string } = {};
-              groupItem.fields.forEach((field) => {
-                const fieldId = generateUniqueId(item.id, groupIndex, field.id);
-                field.id = fieldId;
-                groupState[field.id] = "";
+              
+              // Recursive function to process nested groups
+              const processNestedFields = (fields: Item[], parentGroupId: string, parentGroupIndex: number) => {
+                fields.forEach((field) => {
+                  if (field.type === "group") {
+                    // Generate a unique ID for the nested group
+                    const nestedGroupId = generateUniqueId(parentGroupId, parentGroupIndex, field.id);
+                    field.id = nestedGroupId;
+                    
+                    // Initialize nested group states if they don't exist
+                    if (!initialGroupStates[nestedGroupId]) {
+                      initialGroupStates[nestedGroupId] = [];
+                    }
+                    
+                    // Process nested group items
+                    if (field.groupItems) {
+                      field.groupItems.forEach((nestedGroupItem, nestedGroupIndex) => {
+                        const nestedGroupState: { [key: string]: string } = {};
+                        processNestedFields(nestedGroupItem.fields, nestedGroupId, nestedGroupIndex);                       
+                        // Add the nested group state
+                        initialGroupStates[nestedGroupId][nestedGroupIndex] = nestedGroupState;
+                      });
+                    }
+                  } else {
+                    // Set class to the original id for all group fields
+                    if (!field.class) {
+                      field.class = field.id;
+                    }
+                    const fieldId = generateUniqueId(parentGroupId, parentGroupIndex, field.id);
+                    field.id = fieldId;
+                  }
               });
+            };
+              processNestedFields(groupItem.fields, item.id, groupIndex);
               return groupState;
             }) || [];
         } else {
@@ -282,8 +352,30 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
         initialFormStates[key] = value;
       }
     });
-  }, []);
+  }, [data]);
 
+  useEffect(() => {
+    const items = formData?.data?.items;
+    if (!items || Object.keys(formStates).length === 0) return;
+
+    registerAllFields(items);
+
+    const syncFields = (values: Record<string, any>) => {
+      for (const [fieldId, value] of Object.entries(values)) {
+        if (value != null && value !== "") {
+          store.setState(fieldId, value);
+        }
+      }
+    };
+
+    // Sync all current form values to the store
+    syncFields(formStates);
+    for (const groupArray of Object.values(groupStates)) {
+      groupArray.forEach(syncFields);
+    }
+
+    store.initializeExternalScript();
+  }, [formStates, groupStates, formData]);
 
   /*
   The following function is used to handle if any input value is change
@@ -302,12 +394,34 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
 
     if (groupId !== null && groupIndex !== null) {
       validationError = validateField(field, value);
-      setGroupStates((prevState) => ({
+      setGroupStates((prevState) => {
+        // Ensure the group exists in state
+        if (!prevState[groupId]) {
+          console.warn(`Group ${groupId} not found in state, initializing...`);
+          return {
+            ...prevState,
+            [groupId]: [{[fieldId]: value}]
+          };
+        }
+        
+        // Ensure the group index exists
+        if (!prevState[groupId][groupIndex]) {
+          console.warn(`Group index ${groupIndex} not found for group ${groupId}, initializing...`);
+          const newGroupStates = [...prevState[groupId]];
+          newGroupStates[groupIndex] = {[fieldId]: value};
+          return {
+            ...prevState,
+            [groupId]: newGroupStates
+          };
+        }
+
+        return {
         ...prevState,
         [groupId]: prevState[groupId].map((item, index) =>
           index === groupIndex ? { ...item, [fieldId]: value } : item
         ),
-      }));
+        };
+      });
     } else {
       validationError = validateField(field, value);
       setFormStates((prevState) => ({
@@ -315,6 +429,9 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
         [fieldId]: value,
       }));
     }
+    // Update external store
+    store.setState(fieldId, value);
+    
     setFormErrors((prevErrors) => ({
       ...prevErrors,
       [fieldId]: validationError,
@@ -333,8 +450,38 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
         const foundGroup = findGroup(item.containerItems, groupId);
         if (foundGroup) return foundGroup;
       }
+      // Search within group items for nested groups
+      if (item.type === "group" && item.groupItems) {
+        for (const groupItem of item.groupItems) {
+          const foundGroup = findGroup(groupItem.fields, groupId);
+          if (foundGroup) return foundGroup;
+        }
+      }
     }
     return undefined;
+  };
+
+  // Find and update a nested group
+  const updateNestedGroup = (items: Item[], groupId: string, updateFn: (group: Item) => void): boolean => {
+    for (const item of items) {
+      if (item.id === groupId && item.type === "group") {
+        updateFn(item);
+        return true;
+      }
+      if (item.type === "container" && item.containerItems) {
+        if (updateNestedGroup(item.containerItems, groupId, updateFn)) {
+          return true;
+        }
+      }
+      if (item.type === "group" && item.groupItems) {
+        for (const groupItem of item.groupItems) {
+          if (updateNestedGroup(groupItem.fields, groupId, updateFn)) {
+            return true;
+          }
+        }
+      }
+    }
+    return false;
   };
 
   /*
@@ -349,47 +496,101 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
   ) => {
     setFormData((prevState) => {
       const newFormData = { ...prevState };
-      const group = newFormData?.data?.items ? findGroup(newFormData.data.items, groupId) : undefined;
 
-      if (group && group.groupItems) {
+      const updateGroup = (group: Item) => {
+        if (group.groupItems) {
         const groupIndex = group.groupItems.length;
 
         // Create a deep copy of the first group item and modify its IDs
         const newGroupItem = JSON.parse(JSON.stringify(group.groupItems[0]));
-        newGroupItem.fields.forEach((field: Item) => {
-          const newFieldId = generateUniqueId(
-            groupId,
-            groupIndex,
-            field.id.split("-").slice(2).join("-")
-          );
-          field.id = newFieldId;
-        });
+          
+          // Recursively update field IDs in the new group item
+          const updateFieldIds = (fields: Item[], currentGroupId: string, currentGroupIndex: number) => {
+            fields.forEach((field: Item) => {
+              if (field.type === "group" && field.groupItems) {
+                // For nested groups, generate a new unique ID
+                const originalGroupId = field.id.includes('-') ? 
+                  field.id.split("-").slice(-1)[0] : field.id;
+                const nestedGroupId = generateUniqueId(currentGroupId, currentGroupIndex, originalGroupId);
+                field.id = nestedGroupId;
+                
+                // Process nested group items
+                field.groupItems.forEach((nestedGroupItem, nestedIndex) => {
+                  updateFieldIds(nestedGroupItem.fields, nestedGroupId, nestedIndex);
+                });
+              } else {
+                // Set class to the original id before mutating id
+                if (!field.class) {
+                  field.class = field.id;
+                }
+                const originalFieldId = field.class;
+                field.id = generateUniqueId(currentGroupId, currentGroupIndex, originalFieldId);
+              }
+            });
+          };
+
+          updateFieldIds(newGroupItem.fields, groupId, groupIndex);
         group.groupItems.push(newGroupItem);
       }
+      };
 
+      updateNestedGroup(newFormData.data.items, groupId, updateGroup);
       return newFormData;
     });
 
     setGroupStates((prevGroupStates) => {
       const newState = { ...prevGroupStates };
       const newGroupItemState: { [key: string]: string } = {};
-      const group = formData?.data.items.find((item) => item.id === groupId);
+      const group = findGroup(formData?.data?.items || [], groupId);
       const groupIndex = newState[groupId]?.length || 0;
       const firstGroupItem = group?.groupItems?.[0];
 
-      firstGroupItem?.fields.forEach((field: Item) => {
-        const newFieldId = generateUniqueId(
-          groupId,
-          groupIndex,
-          field.id.split("-").slice(2).join("-")
-        );
-        newGroupItemState[newFieldId] =
-          initialData && initialData[newFieldId] ? initialData[newFieldId] : ""; // Use initialData if available
-      });
+      // Recursively create states for nested fields
+      const createNestedStates = (fields: Item[], parentGroupId: string, parentGroupIndex: number) => {
+        fields.forEach((field: Item) => {
+          if (field.type === "group") {
+            // Extract original group ID and create unique nested group ID
+            const originalGroupId = field.id.includes('-') ? 
+              field.id.split("-").slice(-1)[0] : field.id;
+            const nestedGroupId = generateUniqueId(parentGroupId, parentGroupIndex, originalGroupId);
+            
+            // Initialize nested group state if it doesn't exist
+            if (!newState[nestedGroupId]) {
+              newState[nestedGroupId] = [];
+            }
+            
+            // Add initial group items for nested groups
+            if (field.groupItems) {
+              field.groupItems.forEach((nestedGroupItem, nestedIndex) => {
+                const nestedGroupState: { [key: string]: string } = {};
+                createNestedStates(nestedGroupItem.fields, nestedGroupId, nestedIndex);
+                
+                // Ensure we don't overwrite existing nested group states
+                if (!newState[nestedGroupId][nestedIndex]) {
+                  newState[nestedGroupId][nestedIndex] = nestedGroupState;
+                }
+              });
+            }
+          } else {
+            const newFieldId = field.id.includes('-') ? field.id : 
+            generateUniqueId(parentGroupId, parentGroupIndex, field.id);
+            newGroupItemState[newFieldId] = initialData && initialData[newFieldId] ? initialData[newFieldId] : "";
+          }
+        });
+      };
+
+      if (firstGroupItem) {
+        createNestedStates(firstGroupItem.fields, groupId, groupIndex);
+      }
+
+      // Check parent group exists before adding to it
+      if (!newState[groupId]) {
+        newState[groupId] = [];
+      }
 
       return {
         ...newState,
-        [groupId]: [...(prevGroupStates[groupId] || []), newGroupItemState],
+        [groupId]: [...(newState[groupId] || []), newGroupItemState],
       };
     });
   };
@@ -403,23 +604,36 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
   const handleRemoveGroupItem = (groupId: string, groupItemIndex: number) => {
     setFormData((prevState) => {
       const newFormData = { ...prevState };
-      //const group = newFormData?.data.items.find((item) => item.id === groupId);
-      const group = newFormData?.data?.items ? findGroup(newFormData.data.items, groupId) : undefined;
-
-      if (group && group.groupItems) {
-        group?.groupItems?.splice(groupItemIndex, 1);
-        // Update IDs for remaining group items
-        group?.groupItems?.forEach((groupItem, newIndex) => {
-          groupItem.fields.forEach((field: Item) => {
-            field.id = generateUniqueId(
-              groupId,
-              newIndex,
-              field.id.split("-").slice(2).join("-")
-            );
+      
+      const updateGroup = (group: Item) => {
+        if (group.groupItems) {
+          group.groupItems.splice(groupItemIndex, 1);
+          group.groupItems.forEach((groupItem, newIndex) => {
+            const updateFieldIds = (fields: Item[], currentGroupId: string, currentGroupIndex: number) => {
+              fields.forEach((field: Item) => {
+                if (field.type === "group" && field.groupItems) {
+                  field.groupItems.forEach((nestedGroupItem, nestedIndex) => {
+                    updateFieldIds(nestedGroupItem.fields, field.id, nestedIndex);
+                  });
+                } else {
+                  // Preserve the original field ID for the class if it doesn't already have one
+                  if (!field.class) {
+                    const originalFieldId = field.id.includes('-') ? 
+                      field.id.split("-").slice(2).join("-") : field.id;
+                    field.class = originalFieldId;
+                  }
+                  
+                  field.id = generateUniqueId(currentGroupId, currentGroupIndex, field.class);
+                }
           });
-        });
+            };
 
-      }
+            updateFieldIds(groupItem.fields, groupId, newIndex);
+        });
+        }
+      };
+
+      updateNestedGroup(newFormData.data.items, groupId, updateGroup);
       return newFormData;
     });
 
@@ -442,6 +656,19 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
         });
         return newGroupItem;
       });
+
+      const group = findGroup(formData?.data?.items || [], groupId);
+      if (group?.groupItems) {
+        group.groupItems[0]?.fields.forEach((field) => {
+          if (field.type === "group") {
+            // Remove orphaned nested group states
+            if (newState[field.id] && newState[field.id].length > reindexedGroup.length) {
+              newState[field.id] = newState[field.id].slice(0, reindexedGroup.length);
+            }
+          }
+        });
+      }
+
       return {
         ...newState,
         [groupId]: reindexedGroup,
@@ -710,11 +937,16 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
     const isRequired = isFieldRequired(item.validation || []);
     const label = (
       <span>
-        {item.label}
+        {item.label || ""}
         {isRequired && <span className="required-asterisk"> *</span>}
       </span>
     );
 
+    // Get existing field registration or create new one
+    let fieldMethods = store.getFieldRef(fieldId);
+    if (!fieldMethods) {
+      fieldMethods = createFieldRegistrationWrapper(fieldId, groupId || undefined, groupIndex || undefined);
+    }
 
     switch (item.type) {
       case "text-input":
@@ -732,13 +964,13 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
               handleInputChange(fieldId, e.target.value, groupId, groupIndex, item)
             }
             readOnly={formData.readOnly || doesFieldHasCondition("readOnly", item, groupId, groupIndex) || calcValExists || mode == "view"}
-            {...item.attributes}
+            {...filterInvalidDOMProps(item.attributes)}
           >
             <Component
               className="field-container no-print"
               key={fieldId}
               id={fieldId}
-              labelText={label}
+              labelText={item.label ? label : ""}
               placeholder={item.placeholder}
               helperText={item.helperText}
               name={fieldId}
@@ -747,7 +979,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
               }}
               invalid={!!error}
               invalidText={error || ""}
-              {...item.attributes}
+              {...filterInvalidDOMProps(item.attributes)}
             />
           </InputMask>
             <div className="hidden-on-screen field-wrapper-print" style={{
@@ -794,7 +1026,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
                 className="field-container"
                 key={fieldId}
                 id={fieldId}
-                labelText={label}
+                labelText={label || ""}
                 placeholder={item.placeholder}
                 name={fieldId}
                 style={{                  
@@ -802,7 +1034,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
                 }}
                 invalid={!!error}
                 invalidText={error || ""}
-              {...item.attributes}
+              {...filterInvalidDOMProps(item.attributes)}
               />}
           >
           </CurrencyInput>
@@ -830,7 +1062,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
               id={fieldId}
               titleText={label}
               className="field-container no-print"
-              label={item.placeholder}
+              label={item.placeholder || ""} // always a string
               items={items}
               itemToString={itemToString}
               selectedItem={selectedItem}
@@ -848,7 +1080,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
               readOnly={formData.readOnly || doesFieldHasCondition("readOnly", item, groupId, groupIndex) || calcValExists || mode == "view"}
               invalid={!!error}
               invalidText={error || ""}
-              {...item.attributes}
+              {...filterInvalidDOMProps(item.attributes)}
             />
             <div className="hidden-on-screen field-wrapper-print" style={{
               ...(isPrinting ? item.pdfStyles : item.webStyles),
@@ -877,16 +1109,19 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
                 className="field-container no-print"
                 key={fieldId}
                 id={fieldId}
-                labelText={item.label}
-                checked={groupId ? groupStates[groupId]?.[groupIndex!]?.[fieldId] ?? false : formStates[fieldId] ?? false}
-                onChange={(event: React.ChangeEvent<HTMLInputElement>) => {
-                  const isChecked = event.target.checked;
-                  handleInputChange(fieldId, isChecked, groupId, groupIndex, item);
-                }}
+                labelText={item.label || ""}
+                checked={!!(groupId ? groupStates[groupId]?.[groupIndex!]?.[fieldId] : formStates[fieldId])}
+                // Only pass onChange if not readOnly
+                {...(!(formData.readOnly || doesFieldHasCondition("readOnly", item, groupId, groupIndex) || calcValExists || mode == "view") && {
+                  onChange: (event: React.ChangeEvent<HTMLInputElement>) => {
+                    const isChecked = event.target.checked;
+                    handleInputChange(fieldId, isChecked, groupId, groupIndex, item);
+                  }
+                })}
                 readOnly={formData.readOnly || doesFieldHasCondition("readOnly", item, groupId, groupIndex) || calcValExists || mode == "view"}
                 invalid={!!error}
                 invalidText={error || ""}
-                {...item.attributes}
+                {...filterInvalidDOMProps(item.attributes)}
               />
             </div>
             <div className="hidden-on-screen field-wrapper-print" style={{
@@ -916,7 +1151,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
             <Component
               className="field-container"
               id={fieldId}
-              labelText={item.label}
+              labelText={item.label || ""}
               labelA={item.offText || "No"}
               labelB={item.onText || "Yes"}
               size={item.size}
@@ -931,7 +1166,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
               readOnly={formData.readOnly || doesFieldHasCondition("readOnly", item, groupId, groupIndex) || calcValExists || mode == "view"}
               invalid={!!error}
               invalidText={error || ""}
-              {...item.attributes}
+              {...filterInvalidDOMProps(item.attributes)}
             />
           </div>
         );
@@ -982,13 +1217,13 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
               readOnly={formData.readOnly || doesFieldHasCondition("readOnly", item, groupId, groupIndex) || calcValExists || mode == "view"}
               invalid={!!error}
               invalidText={error || ""}
-              {...item.attributes}
+              {...filterInvalidDOMProps(item.attributes)}
 
             >
               <DatePickerInput
                 id={fieldId}
                 placeholder={item.placeholder}
-                labelText={label}
+                labelText={label || ""}
                 readOnly={formData.readOnly || doesFieldHasCondition("readOnly", item, groupId, groupIndex) || calcValExists || mode == "view"}
                 invalid={!!error}
                 invalidText={error || ""}
@@ -1021,7 +1256,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
               key={fieldId}
               className="field-container no-print"
               id={fieldId}
-              labelText={label}
+              labelText={label || ""}
               placeholder={item.placeholder}
               helperText={item.helperText}
               name={fieldId}
@@ -1040,7 +1275,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
               readOnly={formData.readOnly || doesFieldHasCondition("readOnly", item, groupId, groupIndex) || calcValExists || mode == "view"}
               invalid={!!error}
               invalidText={error || ""}
-              {...item.attributes}
+              {...filterInvalidDOMProps(item.attributes)}
             />
             <div className="hidden-on-screen field-wrapper-print text-area" style={{
               ...(isPrinting ? item.pdfStyles : item.webStyles),
@@ -1078,7 +1313,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
             style={{              
               ...(isPrinting ? item.pdfStyles : item.webStyles),
             }}
-            {...item.attributes}
+            {...filterInvalidDOMProps(item.attributes)}
           >
             {item.label}
           </Component>
@@ -1089,10 +1324,9 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
             helperText={item.helperText}
             key={fieldId}
             id={fieldId}
-            label={label}
-            labelText={label}
+            label={label || ""}
             name={fieldId}
-            hideSteppers="true"
+            hideSteppers={true}
             value={
               groupId
                 ? groupStates[groupId]?.[groupIndex!]?.[fieldId] || 0
@@ -1112,7 +1346,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
             }
             invalid={!!error}
             invalidText={error || ""}
-            {...item.attributes}
+            {...filterInvalidDOMProps(item.attributes)}
           />
         );
       case "text-info":
@@ -1126,13 +1360,13 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
             key={fieldId}
             id={fieldId}
             dangerouslySetInnerHTML={{ __html: parseDynamicText(textInfo) }}
-            {...item.attributes}
+            {...filterInvalidDOMProps(item.attributes)}
           />
 
         );
       case "link":
         return (
-          <Component id={fieldId} href={item.value} onClick={handleLinkClick} {...item.attributes}>
+          <Component id={fieldId} href={item.value} onClick={handleLinkClick} {...filterInvalidDOMProps(item.attributes)}>
             {item.label}
           </Component>
         );
@@ -1141,9 +1375,9 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
           <div className="cds--file__container">
             <Component
               id={fieldId}
-              labelTitle={item.labelText}
+              labelTitle={item.labelText || ""}
               labelDescription={item.labelDescription}
-              buttonLabel={item.labelText}
+              buttonLabel={item.labelText || ""}
               buttonKind="primary"
               size={item.size}
               filenameStatus={item.filenameStatus}
@@ -1152,7 +1386,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
               disabled={false}
               iconDescription="Delete file"
               name=""
-              {...item.attributes}
+              {...filterInvalidDOMProps(item.attributes)}
             />
           </div>
         );
@@ -1160,11 +1394,11 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
         return (
           <Component
             id={fieldId}
-            tableTitle={item.labelText}
+            tableTitle={item.labelText || ""}
             initialRows={item.initialRows}
             initialColumns={item.initialColumns}
             initialHeaderNames={item.initialHeaderNames}
-            {...item.attributes}
+            {...filterInvalidDOMProps(item.attributes)}
           />
         );
       case "radio":
@@ -1200,13 +1434,13 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
                 readOnly={formData.readOnly || doesFieldHasCondition("readOnly", item, groupId, groupIndex) || calcValExists || mode == "view"}
                 invalid={!!error}
                 invalidText={error || ""}
-                {...item.attributes}
+                {...filterInvalidDOMProps(item.attributes)}
               >
 
                 {radioOptions.map((option, index) => (
                   <RadioButton
                     key={index}
-                    labelText={option.label}
+                    labelText={option.label || ""}
                     value={option.value}
                     id={`${fieldId}-${index}`}
                   />
@@ -1226,6 +1460,10 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
                       type="radio"
                       value={option.value}
                       checked={valueSelectedForRadio === option.value}
+                      // Only pass onChange if not readOnly
+                      {...(!(formData.readOnly || doesFieldHasCondition("readOnly", item, groupId, groupIndex) || calcValExists || mode == "view") && {
+                        onChange: () => handleInputChange(fieldId, option.value, groupId, groupIndex, item)
+                      })}
                     />
                     <span >{option.label}</span>
                   </label>
@@ -1236,13 +1474,21 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
         );
       case "select":
         const itemsForSelect = item.listItems || [];
+        // Find the currently selected value based on the group state or form state
+        const selectedValueForSelect = groupId
+          ? groupStates[groupId]?.[groupIndex!]?.[fieldId]
+          : formStates[fieldId];
+        // Find the corresponding item from the list
+        const selectedItemForSelect = itemsForSelect.find(
+          (option) => option.value === selectedValueForSelect
+        ) || null;
         return (
           <>
             <Select
               className="field-container no-print"
               id={fieldId}
               name={fieldId}
-              labelText={label}
+              labelText={label || ""}
               helperText={item.helperText}
               style={{
                 ...(isPrinting ? item.pdfStyles : item.webStyles),
@@ -1258,7 +1504,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
 
               invalid={!!error}
               invalidText={error || ""}
-              {...item.attributes}
+              {...filterInvalidDOMProps(item.attributes)}
             >
               <SelectItem value="" text="" />
               {itemsForSelect.map((itemForSelect) => (
@@ -1278,7 +1524,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
 
               <div className="field_value-wrapper-print">
                 {
-                  selectedItem?.label
+                  selectedItemForSelect?.text
                 }
               </div>
             </div>
@@ -1286,7 +1532,9 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
         );
       case "group":
         return (
-          <div key={item.id} className="group-container">
+          <div key={item.id} className="group-container" 
+          {...filterInvalidDOMProps(item.attributes)}
+          >
             <div className="group-header">{item.repeater && item.label}</div>
             {item.groupItems?.map((groupItem, groupIndex) => (
               <div key={`${item.id}-${groupIndex}`} className="group-item-container">
@@ -1330,8 +1578,10 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
                   {groupItem.fields.filter(groupField => !isHidden(groupField)).map((groupField) => (
                     <div
                       key={groupField.id}
+                      id={groupField.id}
                       style={applyWrapperStyles(groupField)}
                       data-print-columns={groupField.pdfStyles?.printColumns || 4}
+                      className={groupField.class ? groupField.class : groupField.id}
                     >
                       {renderComponent(groupField, item.id, groupIndex)}
                     </div>
@@ -1363,7 +1613,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
               style={{
                 ...(isPrinting ? item.pdfStyles : item.webStyles),
               }}
-              {...item.attributes}
+              {...filterInvalidDOMProps(item.attributes)}
             >
               <div className="group-header"
                 style={{
@@ -1655,6 +1905,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
   Call to end point for unlock flags in ICM
   */
   const unlockICMFinalFlags = async () => {
+    if (isStandaloneMode) return "skipped"; // Skip in standalone mode
     try {
 
       const unlockICMFinalEdpoint = API.unlockICMData;
@@ -2129,5 +2380,12 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
 
   );
 };
+
+// Add global type declaration for external scripts
+declare global {
+  interface Window {
+    externalFormInit?: (refsMap: { [key: string]: any }) => void;
+  }
+}
 
 export default Renderer;
