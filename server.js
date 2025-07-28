@@ -105,14 +105,17 @@ const server = http.createServer((req, res) => {
       }
     }
 
-    if (fs.existsSync(resolvedFilePath)) {
-      const ext = path.extname(resolvedFilePath);
+    // Create a safe file path only after validation
+    const safeFilePath = resolvedFilePath;
+
+    if (fs.existsSync(safeFilePath)) {
+      const ext = path.extname(safeFilePath);
       const mimeType = mimeTypes[ext] || "application/octet-stream";
 
       res.setHeader("Content-Type", mimeType);
       res.setHeader("Cache-Control", "public, max-age=31536000");
 
-      const fileStream = fs.createReadStream(resolvedFilePath);
+      const fileStream = fs.createReadStream(safeFilePath);
       fileStream.pipe(res);
 
       fileStream.on("error", (err) => {
