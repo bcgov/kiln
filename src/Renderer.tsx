@@ -966,6 +966,10 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
       </span>
     );
 
+    const HeadingTag = item?.attributes?.level >= 1 && item?.attributes?.level <= 6
+  ? `h${item?.attributes?.level}`
+  : '';
+
     // Get existing field registration or create new one
     let fieldMethods = store.getFieldRef(fieldId);
     if (!fieldMethods) {
@@ -1559,7 +1563,15 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
           <div key={item.id} className="group-container" 
           {...filterInvalidDOMProps(item.attributes)}
           >
-            <div className="group-header">{item.repeater && item.label}</div>
+            <div className="group-header">
+              {HeadingTag
+              ? React.createElement(
+                  HeadingTag as keyof JSX.IntrinsicElements,
+                  {},
+                  item.label
+                )
+              : <>{item.label}</>}
+            </div>
             {item.groupItems?.map((groupItem, groupIndex) => (
               <div key={`${item.id}-${groupIndex}`} className="group-item-container">
                 {item.repeater && (<div className="group-item-header">
@@ -1646,7 +1658,13 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
                   justifyContent: 'space-between',
                 }}
               >
-                {item.label}
+              {HeadingTag
+                  ? React.createElement(
+                      HeadingTag as keyof JSX.IntrinsicElements,
+                      {},
+                      item.label
+                    )
+                  : <>{item.label}</>}
                 {item.containerItems && item.clear_button && (mode == "edit" || goBack) && formData.readOnly != true && (
                   <div className="custom-buttons-no-bg no-print">
                     <Button
