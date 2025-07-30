@@ -219,8 +219,26 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
     if (scriptContent) {
       const script = document.createElement('script');
       script.id = scriptId;
-      script.textContent = scriptContent;
+      script.type = 'text/javascript';
+      script.appendChild(document.createTextNode(scriptContent));
       document.head.appendChild(script);
+      
+      setTimeout(() => {
+        try {
+          const executeScript = document.createElement('script');
+          executeScript.type = 'text/javascript';
+          executeScript.appendChild(document.createTextNode(scriptContent));
+          document.body.appendChild(executeScript);
+          document.body.removeChild(executeScript);
+          
+          setTimeout(() => {
+            store.reinitializeExternalScript();
+          }, 100);
+          
+        } catch (error) {
+          console.error('Error executing mode-specific script:', error);
+        }
+      }, 0);
     }
 
     // Cleanup on unmount
@@ -232,6 +250,12 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
     };
   }, [isPrinting, webStyleSheet, pdfStyleSheet, webFormScript, pdfFormScript]);
 
+  useEffect(() => {
+    if (store.getRegistrationStatus().totalFields > 0) {
+      store.reinitializeExternalScript();
+    }
+  }, [isPrinting, store, store.getRegistrationStatus().totalFields]);
+  
   const isStandaloneMode = mode === "standalone" || import.meta.env.VITE_STANDALONE_MODE === "true";
 
   //on close, execute unlock form
