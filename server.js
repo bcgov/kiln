@@ -38,6 +38,21 @@ const mimeTypes = {
   ".map": "application/json",
 };
 
+// Security function to validate file paths
+function isPathSafe(filePath) {
+  try {
+    const resolvedFilePath = fs.realpathSync(filePath);
+    const relative = path.relative(resolvedDistPath, resolvedFilePath);
+    return (
+      !relative.startsWith("..") &&
+      !path.isAbsolute(relative) &&
+      resolvedFilePath.startsWith(resolvedDistPath + path.sep)
+    );
+  } catch (err) {
+    return false;
+  }
+}
+
 const server = http.createServer((req, res) => {
   console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
 
@@ -62,65 +77,17 @@ const server = http.createServer((req, res) => {
   if (
     pathname.match(/\.(js|css|png|jpg|gif|svg|ico|ttf|woff|woff2|map|json)$/)
   ) {
-    let filePath = path.resolve(distPath, `.${pathname}`);
-    let resolvedFilePath;
-    try {
-      resolvedFilePath = fs.realpathSync(filePath);
-    } catch (err) {
-      res.writeHead(404);
-      res.end("File not found");
-      return;
-    }
+    let filePath = path.join(distPath, pathname);
 
-    // Robust containment check: ensure resolvedFilePath is inside resolvedDistPath
-    const relative = path.relative(resolvedDistPath, resolvedFilePath);
-    if (
-      relative.startsWith("..") || 
-      path.isAbsolute(relative) || 
-      !resolvedFilePath.startsWith(resolvedDistPath + path.sep)
-    ) {
-      res.writeHead(403);
-      res.end("Forbidden");
-      return;
-    }
-
-    // If the file doesn't exist at the direct path, try without /preview prefix
-    if (!fs.existsSync(resolvedFilePath) && pathname.startsWith("/preview/")) {
-      filePath = path.resolve(
-        distPath,
-        `.${pathname.substring("/preview".length)}`
-      );
-      try {
-        resolvedFilePath = fs.realpathSync(filePath);
-      } catch (err) {
-        res.writeHead(404);
-        res.end("File not found");
-        return;
-      }
-      // Robust containment check: ensure resolvedFilePath is inside resolvedDistPath
-      const relativePreview = path.relative(resolvedDistPath, resolvedFilePath);
-      if (
-        relativePreview.startsWith("..") || 
-        path.isAbsolute(relativePreview) || 
-        !resolvedFilePath.startsWith(resolvedDistPath + path.sep)
-      ) {
-        res.writeHead(403);
-        res.end("Forbidden");
-        return;
-      }
-    }
-
-    // Create a safe file path only after validation
-    const safeFilePath = resolvedFilePath;
-
-    if (fs.existsSync(safeFilePath)) {
-      const ext = path.extname(safeFilePath);
+    // Security check for the primary path
+    if (fs.existsSync(filePath) && isPathSafe(filePath)) {
+      const ext = path.extname(filePath);
       const mimeType = mimeTypes[ext] || "application/octet-stream";
 
       res.setHeader("Content-Type", mimeType);
       res.setHeader("Cache-Control", "public, max-age=31536000");
 
-      const fileStream = fs.createReadStream(safeFilePath);
+      const fileStream = fs.createReadStream(filePath);
       fileStream.pipe(res);
 
       fileStream.on("error", (err) => {
@@ -131,6 +98,34 @@ const server = http.createServer((req, res) => {
 
       return;
     }
+
+    // If the file doesn't exist at the direct path, try without /preview prefix
+    if (pathname.startsWith("/preview/")) {
+      filePath = path.join(distPath, pathname.substring("/preview".length));
+
+      if (fs.existsSync(filePath) && isPathSafe(filePath)) {
+        const ext = path.extname(filePath);
+        const mimeType = mimeTypes[ext] || "application/octet-stream";
+
+        res.setHeader("Content-Type", mimeType);
+        res.setHeader("Cache-Control", "public, max-age=31536000");
+
+        const fileStream = fs.createReadStream(filePath);
+        fileStream.pipe(res);
+
+        fileStream.on("error", (err) => {
+          console.error("Error serving file:", err);
+          res.writeHead(404);
+          res.end("File not found");
+        });
+
+        return;
+      }
+    }
+
+    res.writeHead(404);
+    res.end("File not found");
+    return;
   }
 
   // For all other requests (HTML pages), serve index.html
