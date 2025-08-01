@@ -238,7 +238,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
               const groupState: { [key: string]: string } = {};
               groupItem.fields.forEach((field) => {
                 // Save the original ID for later
-                ;(field as any).templateId = field.id;
+                (field as any).templateId = field.id;
                 const fieldId = generateUniqueId(item.id, groupIndex, field.id);
                 field.id = fieldId;
                 groupState[field.id] = "";
