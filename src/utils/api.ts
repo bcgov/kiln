@@ -12,4 +12,5 @@ export const API = {
   generatePortalForm: getApiUrl("/generatePortalForm", import.meta.env.VITE_COMM_API_GENERATE_PORTAL_FORM_ENDPOINT_URL),
   generateStandalone: getApiUrl("/generateStandalone", import.meta.env.VITE_COMM_API_GENERATE_STANDALONE_ENDPOINT_URL),  
   submitForButtonAction: getApiUrl("/submitForPortalAction", import.meta.env.VITE_COMM_API_SUBMIT_TO_ACTION_ENDPOINT_URL),
+  loadPortalForm: getApiUrl("/loadPortalForm", import.meta.env.VITE_COMM_API_LOAD_PORTAL_FORM_ENDPOINT_URL),
 };
