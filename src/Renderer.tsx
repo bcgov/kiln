@@ -793,6 +793,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
       case "currency-input":
         return (
           <CurrencyInput
+          {...item.attributes}
             value={
               groupId
                 ? groupStates[groupId]?.[groupIndex!]?.[fieldId] || ""
@@ -825,7 +826,6 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
                 }}
                 invalid={!!error}
                 invalidText={error || ""}
-              {...item.attributes}
               />}
           >
           </CurrencyInput>
@@ -849,6 +849,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
         return (
           <>
             <Component
+            {...item.attributes}
               key={fieldId}
               id={fieldId}
               titleText={label}
@@ -871,7 +872,6 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
               readOnly={formData.readOnly || doesFieldHasCondition("readOnly", item, groupId, groupIndex) || calcValExists || mode == "view"}
               invalid={!!error}
               invalidText={error || ""}
-              {...item.attributes}
             />
             <div className="hidden-on-screen field-wrapper-print" style={{
               ...(isPrinting ? item.pdfStyles : item.webStyles),
@@ -898,6 +898,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
             }}>
               <Component
                 className="field-container no-print"
+                {...item.attributes}
                 key={fieldId}
                 id={fieldId}
                 labelText={item.label}
@@ -909,7 +910,6 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
                 readOnly={formData.readOnly || doesFieldHasCondition("readOnly", item, groupId, groupIndex) || calcValExists || mode == "view"}
                 invalid={!!error}
                 invalidText={error || ""}
-                {...item.attributes}
               />
             </div>
             <div className="hidden-on-screen field-wrapper-print" style={{
@@ -938,6 +938,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
 
             <Component
               className="field-container"
+              {...item.attributes}
               id={fieldId}
               labelText={item.label}
               labelA={item.offText || "No"}
@@ -954,7 +955,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
               readOnly={formData.readOnly || doesFieldHasCondition("readOnly", item, groupId, groupIndex) || calcValExists || mode == "view"}
               invalid={!!error}
               invalidText={error || ""}
-              {...item.attributes}
+              
             />
           </div>
         );
@@ -974,6 +975,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
           <>
             <Component
               className="field-container no-print"
+              {...item.attributes}
               key={fieldId}
               datePickerType="single"
               value={selectedDate ? [selectedDate] : []}
@@ -1005,7 +1007,6 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
               readOnly={formData.readOnly || doesFieldHasCondition("readOnly", item, groupId, groupIndex) || calcValExists || mode == "view"}
               invalid={!!error}
               invalidText={error || ""}
-              {...item.attributes}
 
             >
               <DatePickerInput
@@ -1041,6 +1042,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
 
           <>
             <Component
+            {...item.attributes}
               key={fieldId}
               className="field-container no-print"
               id={fieldId}
@@ -1063,7 +1065,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
               readOnly={formData.readOnly || doesFieldHasCondition("readOnly", item, groupId, groupIndex) || calcValExists || mode == "view"}
               invalid={!!error}
               invalidText={error || ""}
-              {...item.attributes}
+              
             />
             <div className="hidden-on-screen field-wrapper-print text-area" style={{
               ...(isPrinting ? item.pdfStyles : item.webStyles),
@@ -1085,6 +1087,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
       case "button":
         return (
           <Component
+          {...item.attributes}
             key={fieldId}
             id={fieldId}
             name={fieldId}
@@ -1101,7 +1104,6 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
             style={{              
               ...(isPrinting ? item.pdfStyles : item.webStyles),
             }}
-            {...item.attributes}
           >
             {item.label}
           </Component>
@@ -1109,6 +1111,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
       case "number-input":
         return (
           <Component
+          {...item.attributes}
             helperText={item.helperText}
             key={fieldId}
             id={fieldId}
@@ -1135,7 +1138,6 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
             }
             invalid={!!error}
             invalidText={error || ""}
-            {...item.attributes}
           />
         );
       case "text-info":
@@ -1163,6 +1165,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
         return (
           <div className="cds--file__container">
             <Component
+            {...item.attributes}
               id={fieldId}
               labelTitle={item.labelText}
               labelDescription={item.labelDescription}
@@ -1175,19 +1178,18 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
               disabled={false}
               iconDescription="Delete file"
               name=""
-              {...item.attributes}
             />
           </div>
         );
       case "table":
         return (
           <Component
+          {...item.attributes}
             id={fieldId}
             tableTitle={item.labelText}
             initialRows={item.initialRows}
             initialColumns={item.initialColumns}
             initialHeaderNames={item.initialHeaderNames}
-            {...item.attributes}
           />
         );
       case "radio":
@@ -1207,7 +1209,8 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
               ...(isPrinting ? item.pdfStyles : item.webStyles),
             }}>
               <Component
-                className="field-container  no-print"
+                className="field-container no-print"
+                {...item.attributes}
                 legendText={label}
                 orientation="vertical"
                 id={fieldId}
@@ -1223,7 +1226,6 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
                 readOnly={formData.readOnly || doesFieldHasCondition("readOnly", item, groupId, groupIndex) || calcValExists || mode == "view"}
                 invalid={!!error}
                 invalidText={error || ""}
-                {...item.attributes}
               >
 
                 {radioOptions.map((option, index) => (
@@ -1263,6 +1265,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
           <>
             <Select
               className="field-container no-print"
+              {...item.attributes}
               id={fieldId}
               name={fieldId}
               labelText={label}
@@ -1281,7 +1284,6 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
 
               invalid={!!error}
               invalidText={error || ""}
-              {...item.attributes}
             >
               <SelectItem value="" text="" />
               {itemsForSelect.map((itemForSelect) => (
