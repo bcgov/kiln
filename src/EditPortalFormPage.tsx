@@ -60,8 +60,8 @@ const EditPortalFormPage: React.FC = () => {
         const errorData = await response.json(); // Parse error response        
         throw new Error(errorData.error || "Something went wrong");
       } else {
-        const result = await response.json();
-        setJsonContent(result.save_data);        
+        const result = await response.json();        
+        setJsonContent(result);        
       }
 
     } catch (error) {
