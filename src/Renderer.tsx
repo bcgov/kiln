@@ -408,11 +408,8 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
         // Update IDs for remaining group items
         group?.groupItems?.forEach((groupItem, newIndex) => {
           groupItem.fields.forEach((field: Item) => {
-            field.id = generateUniqueId(
-              groupId,
-              newIndex,
-              field.id.split("-").slice(2).join("-")
-            );
+            const templateld = (field as any).templateId as string;
+            field.id = generateUniqueId(groupId, newIndex, templateld);            
           });
         });
 
@@ -429,13 +426,11 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
       // Reindex the remaining items correctly
       const reindexedGroup = updatedGroup.map((groupItem, newIndex) => {
         const newGroupItem: { [key: string]: string } = {};
-        Object.keys(groupItem).forEach((key) => {
-          const newKey = generateUniqueId(
-            groupId,
-            newIndex,
-            key.split("-").slice(2).join("-")
-          );
-          newGroupItem[newKey] = groupItem[key];
+        const groupDef = findGroup(formData.data.items, groupId)!;
+        groupDef.groupItems![newIndex].fields.forEach((fieldDef) => {
+          const templateId = (fieldDef as any).templateId as string;
+            const oldKey = Object.keys(groupItem).find(k => k.endsWith(`-${templateId}`))!;
+            newGroupItem[fieldDef.id] = groupItem[oldKey];
         });
         return newGroupItem;
       });
