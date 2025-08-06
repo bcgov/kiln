@@ -37,15 +37,7 @@ const App: React.FC = () => {
     "/error",
     ...(isPortalIntegrated ? ["/new"] : []),
   ];
-  /* const NewFormConditionalRoute = isPortalIntegrated ? (
-    <NewPortalFormPage/>
-  ) :(
-    <PrivateRoute>
-      <NewFormPage />
-    </PrivateRoute>
-  ) ; */
- 
-
+  
   useEffect(() => {
     const initKeycloak = async () => {
       try {
