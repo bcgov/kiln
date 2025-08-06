@@ -43,92 +43,11 @@ import {
 /*creating the structure of object Item. 
 All the form elements coming in the json will of the format type Item.
 Optional attributes are denied with ?
-Typescript requires the type  to be defined*/
-interface Item {
-  type: string;
-  label?: string;
-  placeholder?: string;
-  id: string;
-  mask?: string;
-  codeContext?: { name: string };
-  header?: string;
-  offText?: string;
-  onText?: string;
-  size?: string;
-  listItems?: { value: string; text: string }[];
-  groupItems?: { fields: Item[] }[];
-  repeater?: boolean;
-  clear_button?: boolean;
-  labelText: string;
-  helperText?: string;
-  value?: string;
-  filenameStatus?: string;
-  labelDescription?: string;
-  initialRows?: string;
-  initialColumns?: string;
-  initialHeaderNames?: string;
-  repeaterItemLabel?: string;
-  validation?: {
-    type: string;
-    value: string | number | boolean;
-    errorMessage: string;
-  }[];
-  //saveOnSubmit?:boolean;
-  //readOnly?:boolean;
-  conditions?: {
-    type: string;
-    value: string;
-  }[];
-  webStyles?: {
-    [key: string]: string | number;
-  };
-
-  pdfStyles?: {
-    [key: string]: string | number;
-  }
-  containerItems?: Item[];
-  attributes?: { [key: string]: any }; // Additional attributes components
-}
-
-/*
-creating the structure of object Template. 
-Template object is the form definition part of the json.
-Items will be like a subset that is used to represnt the elements or form fields in the form.
-*/
-
-interface Template {
-  version: string;
-  ministry_id: string;
-  id: string;
-  lastModified: string;
-  title: string;
-  readOnly?: boolean;
-  form_id: string;
-  footer: string;
-  pdf_template_id?: string,
-  data: {
-    items: Item[];
-  };
-}
-
-interface SavedFieldData {
-  [key: string]: FieldValue | GroupFieldValueItem[]; // The key can either point to a single field value or an array of group items
-}
-
-type FieldValue = string | boolean | number | { [key: string]: any }; // The value can be of various types, including nested objects
-
-interface GroupFieldValueItem {
-  [key: string]: FieldValue; // Each group item is a map of field IDs to field values
-}
-
-interface SavedData {
-  data: SavedFieldData;
-  form_definition: Template;
-  metadata: {};
-  params?:{};
-}
-
-type GroupState = { [key: string]: string }[]; // New type definition
+Typescript requires the type  to be defined*/  
+import { Template, GroupState,
+  Item, SavedFieldData, FieldValue, SavedData,
+  InterfaceElement} from "./types/template";
+import ButtonRenderer from "./common/ButtonRenderer";
 
 /*
 Each type of fields should be defined in th component mapping
@@ -288,7 +207,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
         unlockICMFinalFlags();
       }
     }
-    if (mode != "standalone") {
+    if (mode != "portal") {
     window.addEventListener("beforeunload", handleClose);
     return () => window.removeEventListener("beforeunload", handleClose);
     }
@@ -318,6 +237,8 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
             item.groupItems?.map((groupItem, groupIndex) => {
               const groupState: { [key: string]: string } = {};
               groupItem.fields.forEach((field) => {
+                // Save the original ID for later
+                (field as any).templateId = field.id;
                 const fieldId = generateUniqueId(item.id, groupIndex, field.id);
                 field.id = fieldId;
                 groupState[field.id] = "";
@@ -438,11 +359,9 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
         // Create a deep copy of the first group item and modify its IDs
         const newGroupItem = JSON.parse(JSON.stringify(group.groupItems[0]));
         newGroupItem.fields.forEach((field: Item) => {
-          const newFieldId = generateUniqueId(
-            groupId,
-            groupIndex,
-            field.id.split("-").slice(2).join("-")
-          );
+          // pull back the original templateId
+          const templateld = (field as any).templateId as string;
+          const newFieldId = generateUniqueId(groupId, groupIndex, templateld);
           field.id = newFieldId;
         });
         group.groupItems.push(newGroupItem);
@@ -459,13 +378,10 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
       const firstGroupItem = group?.groupItems?.[0];
 
       firstGroupItem?.fields.forEach((field: Item) => {
-        const newFieldId = generateUniqueId(
-          groupId,
-          groupIndex,
-          field.id.split("-").slice(2).join("-")
-        );
-        newGroupItemState[newFieldId] =
-          initialData && initialData[newFieldId] ? initialData[newFieldId] : ""; // Use initialData if available
+        // Use the saved templateId
+        const templateld = (field as any).templateId as string;
+        const newFieldId = generateUniqueId(groupId, groupIndex, templateld);
+        newGroupItemState[newFieldId] = initialData?.[newFieldId] ?? "";
       });
 
       return {
@@ -798,22 +714,28 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
 
 
     switch (item.type) {
-      case "text-input":
-        return (
-          <><InputMask
-            className="field-container no-print"
+      case "text-input": {
 
-            mask={item.mask || ''}
-            value={
-              groupId
-                ? groupStates[groupId]?.[groupIndex!]?.[fieldId] || ""
-                : formStates[fieldId] || ""
-            }
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-              handleInputChange(fieldId, e.target.value, groupId, groupIndex, item)
-            }
-            readOnly={formData.readOnly || doesFieldHasCondition("readOnly", item, groupId, groupIndex) || calcValExists || mode == "view"}
+        const value = groupId
+        ? groupStates[groupId]?.[groupIndex!]?.[fieldId] || ""
+        : formStates[fieldId] || ""
+      
+        const onChange = (e: React.ChangeEvent<HTMLInputElement>) =>
+          handleInputChange(fieldId, e.target.value, groupId, groupIndex, item);
+      
+        const readOnly = formData.readOnly || 
+          doesFieldHasCondition("readOnly", item, groupId, groupIndex) || 
+          calcValExists || 
+          mode === "view";
+      
+        const screenInput = item.mask ? (
+          <InputMask
+            className="field-container no-print"
+            mask={item.mask}
             {...item.attributes}
+            value={value}
+            onChange={onChange}
+            readOnly={readOnly}  
           >
             <Component
               className="field-container no-print"
@@ -831,26 +753,47 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
               {...item.attributes}
             />
           </InputMask>
+        ) : (
+          <Component
+            className="field-container no-print"
+            key={fieldId}
+            id={fieldId}
+            {...item.attributes}
+            value={value}
+            onChange={onChange}
+            readOnly={readOnly}
+            labelText={label}
+            placeholder={item.placeholder}
+            helperText={item.helperText}
+            name={fieldId}
+            style={{                
+              ...(isPrinting ? item.pdfStyles : item.webStyles),
+            }}
+            invalid={!!error}
+            invalidText={error || ""}
+            
+          />
+        );  
+        return (
+          <>
+            {screenInput}
             <div className="hidden-on-screen field-wrapper-print" style={{
               ...(isPrinting ? item.pdfStyles : item.webStyles),
             }}>
               <div className="field_label-wrapper-print">
                 <label className="field-label-print"><span>{label}</span> </label>
               </div>
-
               <div className="field_value-wrapper-print">
-                {
-                  groupId
-                    ? groupStates[groupId]?.[groupIndex!]?.[fieldId] || ""
-                    : formStates[fieldId] || ""
-                }
+                {value}
               </div>
             </div>
           </>
         );
+      }    
       case "currency-input":
         return (
           <CurrencyInput
+          {...item.attributes}
             value={
               groupId
                 ? groupStates[groupId]?.[groupIndex!]?.[fieldId] || ""
@@ -883,7 +826,6 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
                 }}
                 invalid={!!error}
                 invalidText={error || ""}
-              {...item.attributes}
               />}
           >
           </CurrencyInput>
@@ -907,6 +849,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
         return (
           <>
             <Component
+            {...item.attributes}
               key={fieldId}
               id={fieldId}
               titleText={label}
@@ -929,7 +872,6 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
               readOnly={formData.readOnly || doesFieldHasCondition("readOnly", item, groupId, groupIndex) || calcValExists || mode == "view"}
               invalid={!!error}
               invalidText={error || ""}
-              {...item.attributes}
             />
             <div className="hidden-on-screen field-wrapper-print" style={{
               ...(isPrinting ? item.pdfStyles : item.webStyles),
@@ -956,6 +898,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
             }}>
               <Component
                 className="field-container no-print"
+                {...item.attributes}
                 key={fieldId}
                 id={fieldId}
                 labelText={item.label}
@@ -967,7 +910,6 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
                 readOnly={formData.readOnly || doesFieldHasCondition("readOnly", item, groupId, groupIndex) || calcValExists || mode == "view"}
                 invalid={!!error}
                 invalidText={error || ""}
-                {...item.attributes}
               />
             </div>
             <div className="hidden-on-screen field-wrapper-print" style={{
@@ -996,6 +938,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
 
             <Component
               className="field-container"
+              {...item.attributes}
               id={fieldId}
               labelText={item.label}
               labelA={item.offText || "No"}
@@ -1012,7 +955,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
               readOnly={formData.readOnly || doesFieldHasCondition("readOnly", item, groupId, groupIndex) || calcValExists || mode == "view"}
               invalid={!!error}
               invalidText={error || ""}
-              {...item.attributes}
+              
             />
           </div>
         );
@@ -1032,6 +975,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
           <>
             <Component
               className="field-container no-print"
+              {...item.attributes}
               key={fieldId}
               datePickerType="single"
               value={selectedDate ? [selectedDate] : []}
@@ -1063,7 +1007,6 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
               readOnly={formData.readOnly || doesFieldHasCondition("readOnly", item, groupId, groupIndex) || calcValExists || mode == "view"}
               invalid={!!error}
               invalidText={error || ""}
-              {...item.attributes}
 
             >
               <DatePickerInput
@@ -1099,6 +1042,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
 
           <>
             <Component
+            {...item.attributes}
               key={fieldId}
               className="field-container no-print"
               id={fieldId}
@@ -1121,7 +1065,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
               readOnly={formData.readOnly || doesFieldHasCondition("readOnly", item, groupId, groupIndex) || calcValExists || mode == "view"}
               invalid={!!error}
               invalidText={error || ""}
-              {...item.attributes}
+              
             />
             <div className="hidden-on-screen field-wrapper-print text-area" style={{
               ...(isPrinting ? item.pdfStyles : item.webStyles),
@@ -1143,6 +1087,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
       case "button":
         return (
           <Component
+          {...item.attributes}
             key={fieldId}
             id={fieldId}
             name={fieldId}
@@ -1159,7 +1104,6 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
             style={{              
               ...(isPrinting ? item.pdfStyles : item.webStyles),
             }}
-            {...item.attributes}
           >
             {item.label}
           </Component>
@@ -1167,6 +1111,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
       case "number-input":
         return (
           <Component
+          {...item.attributes}
             helperText={item.helperText}
             key={fieldId}
             id={fieldId}
@@ -1193,7 +1138,6 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
             }
             invalid={!!error}
             invalidText={error || ""}
-            {...item.attributes}
           />
         );
       case "text-info":
@@ -1221,6 +1165,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
         return (
           <div className="cds--file__container">
             <Component
+            {...item.attributes}
               id={fieldId}
               labelTitle={item.labelText}
               labelDescription={item.labelDescription}
@@ -1233,19 +1178,18 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
               disabled={false}
               iconDescription="Delete file"
               name=""
-              {...item.attributes}
             />
           </div>
         );
       case "table":
         return (
           <Component
+          {...item.attributes}
             id={fieldId}
             tableTitle={item.labelText}
             initialRows={item.initialRows}
             initialColumns={item.initialColumns}
             initialHeaderNames={item.initialHeaderNames}
-            {...item.attributes}
           />
         );
       case "radio":
@@ -1265,7 +1209,8 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
               ...(isPrinting ? item.pdfStyles : item.webStyles),
             }}>
               <Component
-                className="field-container  no-print"
+                className="field-container no-print"
+                {...item.attributes}
                 legendText={label}
                 orientation="vertical"
                 id={fieldId}
@@ -1281,7 +1226,6 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
                 readOnly={formData.readOnly || doesFieldHasCondition("readOnly", item, groupId, groupIndex) || calcValExists || mode == "view"}
                 invalid={!!error}
                 invalidText={error || ""}
-                {...item.attributes}
               >
 
                 {radioOptions.map((option, index) => (
@@ -1321,6 +1265,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
           <>
             <Select
               className="field-container no-print"
+              {...item.attributes}
               id={fieldId}
               name={fieldId}
               labelText={label}
@@ -1339,7 +1284,6 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
 
               invalid={!!error}
               invalidText={error || ""}
-              {...item.attributes}
             >
               <SelectItem value="" text="" />
               {itemsForSelect.map((itemForSelect) => (
@@ -1374,7 +1318,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
                 {item.repeater && (<div className="group-item-header">
                   {item.repeaterItemLabel || item.label}
                   {(item.repeaterItemLabel || item.label) && ` ${groupIndex + 1}`}
-                  {item.groupItems && item.groupItems.length > 1 && (mode == "edit" || goBack || mode == "standalone") && formData.readOnly != true && (
+                  {item.groupItems && item.groupItems.length > 1 && (mode == "edit" || goBack || mode == "portal") && formData.readOnly != true && (
                     <div className="custom-buttons-no-bg no-print">
                       <Button
                         kind="ghost"
@@ -1420,7 +1364,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
                 </div>
               </div>
             ))}
-            {item.repeater && (mode == "edit" || goBack || mode == "standalone") && formData.readOnly != true && (
+            {item.repeater && (mode == "edit" || goBack || mode == "portal") && formData.readOnly != true && (
               <div className="custom-buttons-only">
                 <Button
                   kind="ghost"
@@ -1958,6 +1902,73 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
     }
   };
 
+  const onButtonClick =  async (buttonConfig: InterfaceElement)  => {
+    // This is your parent-level logic
+    console.log("Button clicked:", buttonConfig.label);
+    console.log("Current form data:", buttonConfig);
+    // Perhaps call the backend, show a notification, etc.
+   
+    setIsLoading(true); // Show loading overlay
+    setModalOpen(false); // Ensure modal is closed when a new request starts
+    try {
+      if (validateAllFields()) {
+        const returnMessage =await submitForButtonAction(buttonConfig);
+        if ((returnMessage) === "success") {
+          setModalTitle("Success ✅");
+          setModalMessage("Form Saved Successfully.");
+        } else {
+          setModalTitle("Error ❌ ");
+          setModalMessage(returnMessage);
+        }
+        setModalOpen(true);
+      } else {
+        setModalTitle("Validation Error ❌ ");
+        setModalMessage("Error saving form. Please clear the errors in the form before saving.");
+        setModalOpen(true);
+      }
+    } catch (error) {
+      setModalTitle("Error ❌ ");
+      setModalMessage("Error saving form. Please try again.");
+      setModalOpen(true);
+    }
+    finally {
+      setIsLoading(false); // Hide loading overlay once request completes
+    }
+  };
+
+    const submitForButtonAction = async (buttonConfig: InterfaceElement) => {
+    try {
+      const submitForActionEndpoint = API.submitForButtonAction;
+      const state = sessionStorage.getItem("formParams");
+      const params = state ? (JSON.parse(state) as Record<string,string>) : {};
+      const savedJson: Record<string, any> = {
+        "tokenId": params["id"],        
+        "savedForm": JSON.stringify(createSavedData()),
+        "config":buttonConfig
+      };      
+
+      const response = await fetch(submitForActionEndpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(savedJson),
+      });
+      if (response.ok) {
+        const result = await response.json();
+        console.log("Result ", result);
+        return "success";
+      } else {
+        const errorData = await response.json(); // Parse error response        
+        //throw new Error(errorData.error || "Something went wrong");
+        console.error("Error:",errorData.error);
+        return errorData?.error || "Error saving form. Please try again.";
+      }
+    } catch (error) {
+      console.error("Error:", error);
+      return "failed";
+    }
+  };
 
   const ministryLogoPath = useHref(`/ministries/${formData.ministry_id}.png`);
 
@@ -1998,6 +2009,12 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
     });
   };
 
+  const handleCancel = async () => {
+    window.parent.postMessage (JSON.stringify({"event": "cancel"}), "*");
+  }
+  const handleSubmit = async () => {
+    window.parent.postMessage (JSON.stringify({"event": "cancel"}), "*");
+  }
   const handleGenerate = async () => {
     setIsLoading(true); // Show loading overlay
     setModalOpen(false); // Ensure modal is closed when a new request starts
@@ -2059,11 +2076,35 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
                   </Button>                  
                 </>
               )}
+              {(mode == "previewPortal") && (
+                <>
+                <Button onClick={handleCancel} kind="secondary" className="no-print" id="generate">
+                  Cancel
+                </Button>      
+                <Button onClick={handleSubmit} kind="secondary" className="no-print" id="generate">
+                  Submit
+                </Button>             
+              </>
+            )}
+
+              {(mode == "portal" || goBack)  && formData.interface && (
+              <div className="header-buttons-only no-print"> 
+                {formData.interface?.map((btn: any, idx: any) => (
+                  <ButtonRenderer
+                      key={idx}
+                      config={btn}
+                      onButtonClick={onButtonClick}
+                      disabled={typeof goBack === 'function'}   // Now matches single-arg signature
+                    />
+                ))}      
+              </div>
+            )}
               {goBack && (
                 <Button onClick={goBack} kind="secondary" className="no-print">
                   Back
                 </Button>
               )}
+              
               <Button kind="secondary" onClick={handlePrint} className="no-print">
                 Print
               </Button>
@@ -2117,7 +2158,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
                   {renderComponent(item)}
                 </div>
               ))}
-            </Row>
+            </Row>            
           </FlexGrid>
         </div>
       </div>
