@@ -1,9 +1,10 @@
+{{- range .Values.routes }}
 apiVersion: route.openshift.io/v1
 kind: Route
 metadata:
-  name: kiln
+  name: {{ .name }}
   annotations:
-    haproxy.router.openshift.io/ip_whitelist: 142.22.0.0/15 142.24.0.0/13 142.32.0.0/14 142.36.0.0/16
+    haproxy.router.openshift.io/ip_whitelist: {{ join " " .whitelist }}
   labels:
     app.kubernetes.io/name: kiln
 spec:

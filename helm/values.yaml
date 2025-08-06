@@ -1,4 +1,4 @@
-replicaCount: 1
+replicaCount: 2
 
 image:
   repository: ghcr.io/bcgov/kiln
@@ -16,3 +16,14 @@ nodeSelector: {}
 tolerations: []
 
 affinity: {}
+
+routes:
+  - name: kiln
+    whitelist:
+      - 142.22.0.0/15
+      - 142.24.0.0/13
+      - 142.32.0.0/14
+      - 142.36.0.0/16
+  - name: kiln-outbound-api
+    whitelist:
+      - 142.34.110.70
