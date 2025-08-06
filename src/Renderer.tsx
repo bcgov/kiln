@@ -2009,6 +2009,12 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
     });
   };
 
+  const handleCancel = async () => {
+    window.parent.postMessage (JSON.stringify({"event": "cancel"}), "*");
+  }
+  const handleSubmit = async () => {
+    window.parent.postMessage (JSON.stringify({"event": "cancel"}), "*");
+  }
   const handleGenerate = async () => {
     setIsLoading(true); // Show loading overlay
     setModalOpen(false); // Ensure modal is closed when a new request starts
@@ -2070,6 +2076,17 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
                   </Button>                  
                 </>
               )}
+              {(mode == "previewPortal") && (
+                <>
+                <Button onClick={handleCancel} kind="secondary" className="no-print" id="generate">
+                  Cancel
+                </Button>      
+                <Button onClick={handleSubmit} kind="secondary" className="no-print" id="generate">
+                  Submit
+                </Button>             
+              </>
+            )}
+
               {(mode == "portal" || goBack)  && formData.interface && (
               <div className="header-buttons-only no-print"> 
                 {formData.interface?.map((btn: any, idx: any) => (
