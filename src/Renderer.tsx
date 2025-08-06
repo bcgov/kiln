@@ -237,6 +237,8 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
             item.groupItems?.map((groupItem, groupIndex) => {
               const groupState: { [key: string]: string } = {};
               groupItem.fields.forEach((field) => {
+                // Save the original ID for later
+                (field as any).templateId = field.id;
                 const fieldId = generateUniqueId(item.id, groupIndex, field.id);
                 field.id = fieldId;
                 groupState[field.id] = "";
@@ -357,11 +359,9 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
         // Create a deep copy of the first group item and modify its IDs
         const newGroupItem = JSON.parse(JSON.stringify(group.groupItems[0]));
         newGroupItem.fields.forEach((field: Item) => {
-          const newFieldId = generateUniqueId(
-            groupId,
-            groupIndex,
-            field.id.split("-").slice(2).join("-")
-          );
+          // pull back the original templateId
+          const templateld = (field as any).templateId as string;
+          const newFieldId = generateUniqueId(groupId, groupIndex, templateld);
           field.id = newFieldId;
         });
         group.groupItems.push(newGroupItem);
@@ -378,13 +378,10 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
       const firstGroupItem = group?.groupItems?.[0];
 
       firstGroupItem?.fields.forEach((field: Item) => {
-        const newFieldId = generateUniqueId(
-          groupId,
-          groupIndex,
-          field.id.split("-").slice(2).join("-")
-        );
-        newGroupItemState[newFieldId] =
-          initialData && initialData[newFieldId] ? initialData[newFieldId] : ""; // Use initialData if available
+        // Use the saved templateId
+        const templateld = (field as any).templateId as string;
+        const newFieldId = generateUniqueId(groupId, groupIndex, templateld);
+        newGroupItemState[newFieldId] = initialData?.[newFieldId] ?? "";
       });
 
       return {
@@ -717,22 +714,28 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
 
 
     switch (item.type) {
-      case "text-input":
-        return (
-          <><InputMask
-            className="field-container no-print"
+      case "text-input": {
 
-            mask={item.mask || ''}
-            value={
-              groupId
-                ? groupStates[groupId]?.[groupIndex!]?.[fieldId] || ""
-                : formStates[fieldId] || ""
-            }
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-              handleInputChange(fieldId, e.target.value, groupId, groupIndex, item)
-            }
-            readOnly={formData.readOnly || doesFieldHasCondition("readOnly", item, groupId, groupIndex) || calcValExists || mode == "view"}
+        const value = groupId
+        ? groupStates[groupId]?.[groupIndex!]?.[fieldId] || ""
+        : formStates[fieldId] || ""
+      
+        const onChange = (e: React.ChangeEvent<HTMLInputElement>) =>
+          handleInputChange(fieldId, e.target.value, groupId, groupIndex, item);
+      
+        const readOnly = formData.readOnly || 
+          doesFieldHasCondition("readOnly", item, groupId, groupIndex) || 
+          calcValExists || 
+          mode === "view";
+      
+        const screenInput = item.mask ? (
+          <InputMask
+            className="field-container no-print"
+            mask={item.mask}
             {...item.attributes}
+            value={value}
+            onChange={onChange}
+            readOnly={readOnly}  
           >
             <Component
               className="field-container no-print"
@@ -750,26 +753,47 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
               {...item.attributes}
             />
           </InputMask>
+        ) : (
+          <Component
+            className="field-container no-print"
+            key={fieldId}
+            id={fieldId}
+            {...item.attributes}
+            value={value}
+            onChange={onChange}
+            readOnly={readOnly}
+            labelText={label}
+            placeholder={item.placeholder}
+            helperText={item.helperText}
+            name={fieldId}
+            style={{                
+              ...(isPrinting ? item.pdfStyles : item.webStyles),
+            }}
+            invalid={!!error}
+            invalidText={error || ""}
+            
+          />
+        );  
+        return (
+          <>
+            {screenInput}
             <div className="hidden-on-screen field-wrapper-print" style={{
               ...(isPrinting ? item.pdfStyles : item.webStyles),
             }}>
               <div className="field_label-wrapper-print">
                 <label className="field-label-print"><span>{label}</span> </label>
               </div>
-
               <div className="field_value-wrapper-print">
-                {
-                  groupId
-                    ? groupStates[groupId]?.[groupIndex!]?.[fieldId] || ""
-                    : formStates[fieldId] || ""
-                }
+                {value}
               </div>
             </div>
           </>
         );
+      }    
       case "currency-input":
         return (
           <CurrencyInput
+          {...item.attributes}
             value={
               groupId
                 ? groupStates[groupId]?.[groupIndex!]?.[fieldId] || ""
@@ -802,7 +826,6 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
                 }}
                 invalid={!!error}
                 invalidText={error || ""}
-              {...item.attributes}
               />}
           >
           </CurrencyInput>
@@ -826,6 +849,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
         return (
           <>
             <Component
+            {...item.attributes}
               key={fieldId}
               id={fieldId}
               titleText={label}
@@ -848,7 +872,6 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
               readOnly={formData.readOnly || doesFieldHasCondition("readOnly", item, groupId, groupIndex) || calcValExists || mode == "view"}
               invalid={!!error}
               invalidText={error || ""}
-              {...item.attributes}
             />
             <div className="hidden-on-screen field-wrapper-print" style={{
               ...(isPrinting ? item.pdfStyles : item.webStyles),
@@ -875,6 +898,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
             }}>
               <Component
                 className="field-container no-print"
+                {...item.attributes}
                 key={fieldId}
                 id={fieldId}
                 labelText={item.label}
@@ -886,7 +910,6 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
                 readOnly={formData.readOnly || doesFieldHasCondition("readOnly", item, groupId, groupIndex) || calcValExists || mode == "view"}
                 invalid={!!error}
                 invalidText={error || ""}
-                {...item.attributes}
               />
             </div>
             <div className="hidden-on-screen field-wrapper-print" style={{
@@ -915,6 +938,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
 
             <Component
               className="field-container"
+              {...item.attributes}
               id={fieldId}
               labelText={item.label}
               labelA={item.offText || "No"}
@@ -931,7 +955,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
               readOnly={formData.readOnly || doesFieldHasCondition("readOnly", item, groupId, groupIndex) || calcValExists || mode == "view"}
               invalid={!!error}
               invalidText={error || ""}
-              {...item.attributes}
+              
             />
           </div>
         );
@@ -951,6 +975,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
           <>
             <Component
               className="field-container no-print"
+              {...item.attributes}
               key={fieldId}
               datePickerType="single"
               value={selectedDate ? [selectedDate] : []}
@@ -982,7 +1007,6 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
               readOnly={formData.readOnly || doesFieldHasCondition("readOnly", item, groupId, groupIndex) || calcValExists || mode == "view"}
               invalid={!!error}
               invalidText={error || ""}
-              {...item.attributes}
 
             >
               <DatePickerInput
@@ -1018,6 +1042,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
 
           <>
             <Component
+            {...item.attributes}
               key={fieldId}
               className="field-container no-print"
               id={fieldId}
@@ -1040,7 +1065,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
               readOnly={formData.readOnly || doesFieldHasCondition("readOnly", item, groupId, groupIndex) || calcValExists || mode == "view"}
               invalid={!!error}
               invalidText={error || ""}
-              {...item.attributes}
+              
             />
             <div className="hidden-on-screen field-wrapper-print text-area" style={{
               ...(isPrinting ? item.pdfStyles : item.webStyles),
@@ -1062,6 +1087,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
       case "button":
         return (
           <Component
+          {...item.attributes}
             key={fieldId}
             id={fieldId}
             name={fieldId}
@@ -1078,7 +1104,6 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
             style={{              
               ...(isPrinting ? item.pdfStyles : item.webStyles),
             }}
-            {...item.attributes}
           >
             {item.label}
           </Component>
@@ -1086,6 +1111,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
       case "number-input":
         return (
           <Component
+          {...item.attributes}
             helperText={item.helperText}
             key={fieldId}
             id={fieldId}
@@ -1112,7 +1138,6 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
             }
             invalid={!!error}
             invalidText={error || ""}
-            {...item.attributes}
           />
         );
       case "text-info":
@@ -1140,6 +1165,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
         return (
           <div className="cds--file__container">
             <Component
+            {...item.attributes}
               id={fieldId}
               labelTitle={item.labelText}
               labelDescription={item.labelDescription}
@@ -1152,19 +1178,18 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
               disabled={false}
               iconDescription="Delete file"
               name=""
-              {...item.attributes}
             />
           </div>
         );
       case "table":
         return (
           <Component
+          {...item.attributes}
             id={fieldId}
             tableTitle={item.labelText}
             initialRows={item.initialRows}
             initialColumns={item.initialColumns}
             initialHeaderNames={item.initialHeaderNames}
-            {...item.attributes}
           />
         );
       case "radio":
@@ -1184,7 +1209,8 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
               ...(isPrinting ? item.pdfStyles : item.webStyles),
             }}>
               <Component
-                className="field-container  no-print"
+                className="field-container no-print"
+                {...item.attributes}
                 legendText={label}
                 orientation="vertical"
                 id={fieldId}
@@ -1200,7 +1226,6 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
                 readOnly={formData.readOnly || doesFieldHasCondition("readOnly", item, groupId, groupIndex) || calcValExists || mode == "view"}
                 invalid={!!error}
                 invalidText={error || ""}
-                {...item.attributes}
               >
 
                 {radioOptions.map((option, index) => (
@@ -1240,6 +1265,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
           <>
             <Select
               className="field-container no-print"
+              {...item.attributes}
               id={fieldId}
               name={fieldId}
               labelText={label}
@@ -1258,7 +1284,6 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
 
               invalid={!!error}
               invalidText={error || ""}
-              {...item.attributes}
             >
               <SelectItem value="" text="" />
               {itemsForSelect.map((itemForSelect) => (
@@ -1984,6 +2009,12 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
     });
   };
 
+  const handleCancel = async () => {
+    window.parent.postMessage (JSON.stringify({"event": "cancel"}), "*");
+  }
+  const handleSubmit = async () => {
+    window.parent.postMessage (JSON.stringify({"event": "cancel"}), "*");
+  }
   const handleGenerate = async () => {
     setIsLoading(true); // Show loading overlay
     setModalOpen(false); // Ensure modal is closed when a new request starts
@@ -2045,6 +2076,17 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
                   </Button>                  
                 </>
               )}
+              {(mode == "previewPortal") && (
+                <>
+                <Button onClick={handleCancel} kind="secondary" className="no-print" id="generate">
+                  Cancel
+                </Button>      
+                <Button onClick={handleSubmit} kind="secondary" className="no-print" id="generate">
+                  Submit
+                </Button>             
+              </>
+            )}
+
               {(mode == "portal" || goBack)  && formData.interface && (
               <div className="header-buttons-only no-print"> 
                 {formData.interface?.map((btn: any, idx: any) => (

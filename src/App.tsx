@@ -4,6 +4,7 @@ import NewPortalFormPage from "./NewPortalFormPage";
 import EditFormPage from "./EditFormPage";
 import ViewFormPage from "./ViewFormPage";
 import PreviewFormPage from "./PreviewFormPage";
+import PreviewPortalFormPage from "./PreviewPortalFormPage";
 import GenerateFormPage from "./GenerateFormPage";
 import UnauthorizedPage from "./UnauthorizedPage";
 import ErrorPage from "./ErrorPage";
@@ -30,6 +31,7 @@ const App: React.FC = () => {
   // Public Routes
   const publicRoutes = [
     "/preview",
+    "/previewPortal",
     "/unauthorized",
     "/printToPDF",
     "/error",
@@ -74,6 +76,7 @@ const App: React.FC = () => {
       <Routes>
         {/* Public Routes */}
         <Route path="/preview" element={<PreviewFormPage />} />
+        <Route path="/previewPortal" element={<PreviewPortalFormPage />} />
         <Route path="/generateForm" element={<GenerateFormPage />} />
         <Route path="/unauthorized" element={<UnauthorizedPage />} />
         <Route path="/error" element={<ErrorPage />} />
