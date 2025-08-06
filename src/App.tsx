@@ -16,6 +16,7 @@ import { Routes, Route, useLocation } from "react-router-dom";
 
 import { initializeKeycloak } from "./keycloak";
 import { PrivateRoute } from "./PrivateRoute";
+import EditPortalFormPage from "./EditPortalFormPage";
 
 export const AuthenticationContext = createContext<any>(null);
 
@@ -36,15 +37,7 @@ const App: React.FC = () => {
     "/error",
     ...(isPortalIntegrated ? ["/new"] : []),
   ];
-  const NewFormConditionalRoute = isPortalIntegrated ? (
-    <NewPortalFormPage/>
-  ) :(
-    <PrivateRoute>
-      <NewFormPage />
-    </PrivateRoute>
-  ) ;
- 
-
+  
   useEffect(() => {
     const initKeycloak = async () => {
       try {
@@ -79,11 +72,23 @@ const App: React.FC = () => {
         <Route path="/generateForm" element={<GenerateFormPage />} />
         <Route path="/unauthorized" element={<UnauthorizedPage />} />
         <Route path="/error" element={<ErrorPage />} />
+        {isPortalIntegrated ?(
+          <>
+          <Route path="/new" element={<NewPortalFormPage/>}/>
+          <Route path="/edit" element={<EditPortalFormPage />} />
+          <Route path="/view" element={<PrivateRoute><ViewFormPage /></PrivateRoute>} />
+          </>
 
-        {/* Protected Routes */}
-        <Route path="/new" element={NewFormConditionalRoute}/>
+        ):(
+         <>
+          {/* Protected Routes */}
+        <Route path="/new" element={<PrivateRoute><NewFormPage /></PrivateRoute>}/>
         <Route path="/edit" element={<PrivateRoute><EditFormPage /></PrivateRoute>} />
         <Route path="/view" element={<PrivateRoute><ViewFormPage /></PrivateRoute>} />
+         </> 
+        )}
+
+       
       </Routes>
     </AuthenticationContext.Provider>
   );
