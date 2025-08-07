@@ -1,0 +1,56 @@
+.logs-viewer {
+
+    $border-color: #e0e0e0;
+
+    $old-value-color: #da1e28;
+    $new-value-color: #198038;
+    $no-value-color: #a8a8a8;
+
+  &__header {
+    margin: 12px 0;
+    font-size: 1.2rem;
+    font-weight: 500;
+  }
+
+  &__container {
+    max-height: 600px;
+    padding: 12px;
+    border: 1px solid $border-color;
+    border-radius: 4px;
+    overflow: auto;
+    
+    @media (max-width: 768px) {
+      max-height: 300px;
+    }
+  }
+
+  &__log-entry {
+    margin-bottom: 16px;
+    padding-bottom: 16px;
+    
+    &:not(:last-child) {
+      border-bottom: 1px solid $border-color;
+    }
+  }
+
+  &__table-controls {
+    display: flex;
+    justify-content: flex-end;
+    .cds--btn {
+      font-size: 0.7rem;
+    }
+  }
+
+  &__old-value {
+    color: $old-value-color;
+  }
+
+  &__new-value {
+    color: $new-value-color;
+    font-weight: 500;
+  }
+
+  &__no-value {
+    color: $no-value-color;
+  }
+}
