@@ -146,5 +146,10 @@ export function getApiUrl(path: string, envVar?: string): string {
     return `${prefix}/api${cleanPath}`;
 }
 
-
+/**
+ * ADO-2793 Create per-server conditional read only fields
+ * make this variable global so Renderer can use it to eveluating custom scripts
+ * determine if a field is visible/readonly for portal
+ */
+export const isPortalIntegrated = import.meta.env.VITE_IS_PORTAL_INTEGRATED === "true";
    
