@@ -37,7 +37,7 @@ import {
   handleLinkClick,
   validateField,
   isFieldRequired,
-
+  isPortalIntegrated,
 } from "./utils/helpers"; // Import from the helpers file
 
 /*creating the structure of object Item. 
@@ -548,7 +548,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
 
     const visibilityCondition = item.conditions.find(condition => condition.type === 'visibility');
 
-    if (visibilityCondition) {
+    if (visibilityCondition) {  
       try {
         // If the field is in a group, pass groupStates and groupIndex
         if (groupId !== null && groupIndex !== null) {
@@ -557,18 +557,22 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
             "groupStates",
             "groupId",
             "groupIndex",
+            "isPortal",
             visibilityCondition.value
           );
 
-          return conditionFunction(formStates, groupStates, groupId, groupIndex);
+          console.log('groupId !== null, visibilityCondition.value', visibilityCondition.value, conditionFunction(formStates, groupStates, groupId, groupIndex, isPortalIntegrated)); 
+          return conditionFunction(formStates, groupStates, groupId, groupIndex, isPortalIntegrated);
         } else {
           // For non-group fields, evaluate using formStates
           const conditionFunction = new Function(
             "formStates",
             "groupStates",
+            "isPortal",
             visibilityCondition.value
           );
-          return conditionFunction(formStates, groupStates);
+          console.log('groupId == null, visibilityCondition.value', visibilityCondition.value, conditionFunction(formStates, groupStates, isPortalIntegrated)); 
+          return conditionFunction(formStates, groupStates, isPortalIntegrated);
         }
       } catch (error) {
         console.error("Error evaluating condition script:", error);
@@ -648,9 +652,10 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
           "groupStates",
           "groupId",
           "groupIndex",
+          "isPortal",
           typeCondition.value
         );
-        return typeConditionFunction(formStates, groupStates, groupId, groupIndex);
+        return typeConditionFunction(formStates, groupStates, groupId, groupIndex, isPortalIntegrated);
       } catch (error) {
         return false; // Default to false if the script fails
       }
