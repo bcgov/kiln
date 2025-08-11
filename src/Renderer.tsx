@@ -306,23 +306,42 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
     }
 
     // Populate values from dataBindings into the state objects
+    const ensureRowSync = (groupId: string, rowIndex: number) => {
+      const group = findGroup(updatedFormData.data.items, groupId);
+      if (!group || !group.groupItems || !group.groupItems[0]) return;
+
+      // seed templateId on template row
+      group.groupItems[0].fields.forEach((field: any) => {
+        if (!field.templateId) field.templateId = field.id;
+      });
+
+      // clone template row until we have rowIndex
+      while (group.groupItems.length <= rowIndex) {
+        const i = group.groupItems.length;
+        const clone = JSON.parse(JSON.stringify(group.groupItems[0]));
+        clone.fields.forEach((field: any) => {
+          const template = field.templateId || field.id;
+          field.id = generateUniqueId(groupId, i, template);
+          if (!field.templateId) field.templateId = template;
+          field.value = "";
+        });
+        group.groupItems.push(clone);
+      }
+
+      if (!initialGroupStates[groupId]) initialGroupStates[groupId] = [];
+      if (!initialGroupStates[groupId][rowIndex]) initialGroupStates[groupId][rowIndex] = {};
+    };
+
     Object.keys(data.data).forEach((key: string) => {
       const value = data.data[key];
       if (Array.isArray(value)) {
         // If the value is an array, it corresponds to a group
-        if (initialGroupStates[key]) {
-          value.forEach((groupItem, groupIndex) => {
-            // Assign the values from dataBindings to the correct field in the group
-            if (initialGroupStates[key][groupIndex]) {
-              Object.keys(groupItem).forEach((fieldKey) => {
-                initialGroupStates[key][groupIndex][fieldKey] =
-                  groupItem[fieldKey];
-              });
-            } else {
-              handleAddGroupItem(key, groupItem);
-            }
+        value.forEach((groupItem, groupIndex) => {
+          ensureRowSync(key, groupIndex);
+          Object.keys(groupItem).forEach((fieldKey) => {
+            initialGroupStates[key][groupIndex][fieldKey] = groupItem[fieldKey];
           });
-        }
+        });
       } else {
         // Non-group fields
         initialFormStates[key] = value;
