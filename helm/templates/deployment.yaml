@@ -5,7 +5,7 @@ metadata:
   labels:
     app.kubernetes.io/name: kiln
 spec:
-  replicas: {{ .Values.replicaCount }}
+  replicas: { { .Values.replicaCount } }
   selector:
     matchLabels:
       app.kubernetes.io/name: kiln
@@ -20,7 +20,10 @@ spec:
           imagePullPolicy: Always
           ports:
             - containerPort: 8080
-          resources: {{- toYaml .Values.resources | nindent 12 }}
+          resources: { { - toYaml .Values.resources | nindent 12 } }
+          envFrom:
+            - secretRef:
+                name: kiln-secrets
       restartPolicy: Always
   strategy:
     type: Recreate

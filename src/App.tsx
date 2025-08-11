@@ -17,6 +17,8 @@ import { Routes, Route, useLocation } from "react-router-dom";
 import { initializeKeycloak } from "./keycloak";
 import { PrivateRoute } from "./PrivateRoute";
 import EditPortalFormPage from "./EditPortalFormPage";
+import ExternalPreviewPage from "./ExternalPreviewPage";
+import { ExternalStateProvider } from './ExternalStateContext';
 
 export const AuthenticationContext = createContext<any>(null);
 
@@ -25,6 +27,7 @@ const App: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const location = useLocation(); // Get the current route
 
+  const isStandaloneMode = import.meta.env.VITE_STANDALONE_MODE === 'true';
   const isPortalIntegrated = import.meta.env.VITE_IS_PORTAL_INTEGRATED === "true";
   console.log("Is PortalIntegrated",isPortalIntegrated);
 
@@ -39,6 +42,11 @@ const App: React.FC = () => {
   ];
   
   useEffect(() => {
+      // Skip authentication in standalone mode
+      if (isStandaloneMode) {
+        setLoading(false);
+        return;
+      }
     const initKeycloak = async () => {
       try {
         const _keycloak = await initializeKeycloak();
@@ -56,7 +64,7 @@ const App: React.FC = () => {
     } else {
       setLoading(false);
     }
-  }, []);
+  }, [isStandaloneMode]);
 
   //Loading page when waiting for authentication
   if (loading) {
@@ -65,31 +73,34 @@ const App: React.FC = () => {
 
   return (
     <AuthenticationContext.Provider value={keycloak}>
-      <Routes>
-        {/* Public Routes */}
-        <Route path="/preview" element={<PreviewFormPage />} />
-        <Route path="/previewPortal" element={<PreviewPortalFormPage />} />
-        <Route path="/generateForm" element={<GenerateFormPage />} />
-        <Route path="/unauthorized" element={<UnauthorizedPage />} />
-        <Route path="/error" element={<ErrorPage />} />
-        {isPortalIntegrated ?(
+      <ExternalStateProvider>
+        <Routes>
+          {/* Public Routes */}
+          <Route path="/preview" element={<PreviewFormPage />} />
+          <Route path="/preview/:id" element={<ExternalPreviewPage />} />
+          <Route path="/previewPortal" element={<PreviewPortalFormPage />} />
+          <Route path="/generateForm" element={<GenerateFormPage />} />
+          <Route path="/unauthorized" element={<UnauthorizedPage />} />
+          <Route path="/error" element={<ErrorPage />} />
+          {isPortalIntegrated ?(
+            <>
+            <Route path="/new" element={<NewPortalFormPage/>}/>
+            <Route path="/edit" element={<EditPortalFormPage />} />
+            <Route path="/view" element={<PrivateRoute><ViewFormPage /></PrivateRoute>} />
+            </>
+
+          ):(
           <>
-          <Route path="/new" element={<NewPortalFormPage/>}/>
-          <Route path="/edit" element={<EditPortalFormPage />} />
+            {/* Protected Routes */}
+          <Route path="/new" element={<PrivateRoute><NewFormPage /></PrivateRoute>}/>
+          <Route path="/edit" element={<PrivateRoute><EditFormPage /></PrivateRoute>} />
           <Route path="/view" element={<PrivateRoute><ViewFormPage /></PrivateRoute>} />
-          </>
+          </> 
+          )}
 
-        ):(
-         <>
-          {/* Protected Routes */}
-        <Route path="/new" element={<PrivateRoute><NewFormPage /></PrivateRoute>}/>
-        <Route path="/edit" element={<PrivateRoute><EditFormPage /></PrivateRoute>} />
-        <Route path="/view" element={<PrivateRoute><ViewFormPage /></PrivateRoute>} />
-         </> 
-        )}
-
-       
-      </Routes>
+        
+        </Routes>
+      </ExternalStateProvider>
     </AuthenticationContext.Provider>
   );
 };
