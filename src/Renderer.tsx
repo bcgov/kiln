@@ -7,6 +7,7 @@ import { useHref } from 'react-router-dom';
 import CustomModal from "./common/CustomModal"; // Import the modal component
 import LoadingOverlay from "./common/LoadingOverlay";
 import { AuthenticationContext } from "./App";
+import { useExternalState } from "./hooks/ExternalStateHook";
 import {
   TextInput,
   Dropdown,
@@ -37,8 +38,12 @@ import {
   handleLinkClick,
   validateField,
   isFieldRequired,
-
+  isPortalIntegrated,
 } from "./utils/helpers"; // Import from the helpers file
+import {
+  createFieldRegistration,
+  registerAllFields as registerAllFieldsUtil,
+} from "./utils/context";
 
 /*creating the structure of object Item. 
 All the form elements coming in the json will of the format type Item.
@@ -87,6 +92,7 @@ interface RendererProps {
 
 
 const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
+  const { store } = useExternalState();
 
   /*
   the states of the field ouside of the group will be saved in formStates
@@ -108,6 +114,32 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
   const [modalTitle, setModalTitle] = useState("KILN");
   const [modalMessage, setModalMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+
+  // Create Initial field registration in external store
+  const createFieldRegistrationWrapper = (fieldId: string, groupId?: string, groupIndex?: number) => {
+    return createFieldRegistration({
+      fieldId,
+      groupId,
+      groupIndex,
+      store,
+      formData,
+      groupStates,
+      formStates,
+      setFormErrors,
+      handleInputChange,
+      validateField,
+    });
+  };
+
+  // Register all fields with the external store
+  const registerAllFields = (items: Item[], parentGroupId?: string, parentGroupIndex?: number) => {
+    registerAllFieldsUtil({
+      items,
+      parentGroupId,
+      parentGroupIndex,
+      createFieldRegistration: createFieldRegistrationWrapper,
+    });
+  };
 
   if (!data.form_definition) {
     return <div>Invalid Form</div>;
@@ -147,7 +179,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
     return () => mediaQueryList.removeEventListener("change", handlePrint);
   }, []);
 
-   //Manage style and script tags for web and pdf
+  //Manage style and script tags for web and pdf
   function getByType<T extends { type: string; content: string }>(arr: T[] | undefined, type: string): string | undefined {
     return arr?.find((item) => item.type === type)?.content;
   }
@@ -207,7 +239,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
         unlockICMFinalFlags();
       }
     }
-    if (mode != "portal") {
+    if (mode != "portal" && mode != "standalone") {
     window.addEventListener("beforeunload", handleClose);
     return () => window.removeEventListener("beforeunload", handleClose);
     }
@@ -219,72 +251,184 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
   Some attributes need to be set for paging for PDF generation
   */
   useEffect(() => {
+    store.clearRegistrations();
+    // Update formData when new data is received
+    const updatedFormData = JSON.parse(JSON.stringify(data.form_definition));
+    
     const initialFormStates: { [key: string]: string } = {};
-    const initialGroupStates: { [key: string]: GroupState } = {}; // Changed type here   
+    const initialGroupStates: { [key: string]: GroupState } = {};
 
     /*
     recursive anonymous helper function to process the items in the form json initially.
     It will create states for the ids to be rendered.
     */
 
+// In your useEffect initialization, update the processItemsInitially function:
     const processItemsInitially = (items: Item[]) => {
       items.forEach((item) => {
         if (item.type === "container" && item.containerItems) {
           processItemsInitially(item.containerItems);
-        }
-        else if (item.type === "group") {
+        } else if (item.type === "group") {
+          // Initialize group state for this group
           initialGroupStates[item.id] =
             item.groupItems?.map((groupItem, groupIndex) => {
               const groupState: { [key: string]: string } = {};
               groupItem.fields.forEach((field) => {
-                // Save the original ID for later
-                (field as any).templateId = field.id;
-                const fieldId = generateUniqueId(item.id, groupIndex, field.id);
+                // IMPORTANT: Store the original ID as templateId BEFORE modifying
+                if (!(field as any).templateId) {
+                  (field as any).templateId = field.id;
+                }
+                const fieldId = generateUniqueId(item.id, groupIndex, (field as any).templateId);
                 field.id = fieldId;
                 groupState[field.id] = "";
               });
               return groupState;
             }) || [];
+          // Recursively process nested groups/containers inside group items
+          item.groupItems?.forEach((groupItem) => {
+            groupItem.fields.forEach((field) => {
+              if (field.type === "group" && field.groupItems) {
+                processItemsInitially([field]);
+              } else if (field.type === "container" && field.containerItems) {
+                processItemsInitially(field.containerItems);
+              }
+            });
+          });
         } else {
           initialFormStates[item.id] = "";
         }
       });
+    };
+
+
+    if (updatedFormData?.data?.items) {
+      processItemsInitially(updatedFormData.data.items);
     }
 
-    if (formData?.data?.items) {
-      processItemsInitially(formData.data.items);
-    }
-    setFormStates(initialFormStates);
-    setGroupStates(initialGroupStates);
+    // Populate values from dataBindings into the state objects
+    const ensureRowSync = (groupId: string, rowIndex: number) => {
+      const group = findGroup(updatedFormData.data.items, groupId);
+      if (!group || !group.groupItems || !group.groupItems[0]) return;
 
-    /*
-    After the ids are set in state , iterate through the data section (databinding) of the 
-    form and set the value for the ids in state varaible if any. 
-    */
-    // Populate values from dataBindings
+      // seed templateId on template row
+      group.groupItems[0].fields.forEach((field: any) => {
+        if (!field.templateId) field.templateId = field.id;
+      });
+
+      // clone template row until we have rowIndex
+      while (group.groupItems.length <= rowIndex) {
+        const i = group.groupItems.length;
+        const clone = JSON.parse(JSON.stringify(group.groupItems[0]));
+        clone.fields.forEach((field: any) => {
+          const template = field.templateId || field.id;
+          field.id = generateUniqueId(groupId, i, template);
+          if (!field.templateId) field.templateId = template;
+          field.value = "";
+        });
+        group.groupItems.push(clone);
+      }
+
+      if (!initialGroupStates[groupId]) initialGroupStates[groupId] = [];
+      if (!initialGroupStates[groupId][rowIndex]) initialGroupStates[groupId][rowIndex] = {};
+    };
+
     Object.keys(data.data).forEach((key: string) => {
       const value = data.data[key];
       if (Array.isArray(value)) {
         // If the value is an array, it corresponds to a group
-        if (initialGroupStates[key]) {
-          value.forEach((groupItem, groupIndex) => {
-            // Assign the values from dataBindings to the correct field in the group
-            if (initialGroupStates[key][groupIndex]) {
-              Object.keys(groupItem).forEach((fieldKey) => {
-                initialGroupStates[key][groupIndex][fieldKey] =
-                  groupItem[fieldKey];
-              });
-            } else {
-              handleAddGroupItem(key, groupItem);
-            }
+        value.forEach((groupItem, groupIndex) => {
+          ensureRowSync(key, groupIndex);
+          Object.keys(groupItem).forEach((fieldKey) => {
+            initialGroupStates[key][groupIndex][fieldKey] = groupItem[fieldKey];
           });
-        }
+        });
       } else {
         // Non-group fields
         initialFormStates[key] = value;
       }
     });
-  }, []);
+
+    // Now inject the populated states back into the form definition
+    const injectValuesIntoFormData = (items: Item[]) => {
+      items.forEach((item) => {
+        if (item.type === "container" && item.containerItems) {
+          injectValuesIntoFormData(item.containerItems);
+        } else if (item.type === "group" && item.groupItems) {
+          item.groupItems.forEach((groupItem, groupIndex) => {
+            groupItem.fields.forEach((field) => {
+              const fieldId = field.id;
+              if (
+                initialGroupStates[item.id] &&
+                initialGroupStates[item.id][groupIndex] &&
+                initialGroupStates[item.id][groupIndex][fieldId] !== undefined
+              ) {
+                field.value = initialGroupStates[item.id][groupIndex][fieldId];
+              }
+            });
+          });
+        } else {
+          if (initialFormStates[item.id] !== undefined) {
+            item.value = initialFormStates[item.id];
+          }
+        }
+      });
+    };
+
+    if (updatedFormData?.data?.items) {
+      injectValuesIntoFormData(updatedFormData.data.items);
+    }
+
+    // Set all states and form data together
+    setFormStates(initialFormStates);
+    setGroupStates(initialGroupStates);
+    setFormData(updatedFormData);
+  }, [data]);
+
+// Add a ref to track if fields are already registered
+const fieldsRegisteredRef = useRef(false);
+
+useEffect(() => {
+  const items = formData?.data?.items;
+  if (!items || Object.keys(formStates).length === 0 || fieldsRegisteredRef.current) return;
+  
+  registerAllFields(items);
+  fieldsRegisteredRef.current = true;
+
+  const syncFields = (values: Record<string, any>) => {
+    for (const [fieldId, value] of Object.entries(values)) {
+      if (value != null && value !== "") {
+        store.setState(fieldId, value);
+      }
+    }
+  };
+
+  // Sync all current form values to the store
+  syncFields(formStates);
+  for (const groupArray of Object.values(groupStates)) {
+    if (Array.isArray(groupArray)) {
+      groupArray.forEach(syncFields);
+    }
+  }
+
+  store.initializeExternalScript();
+}, [formData?.data?.items]);
+
+// Add a separate effect for syncing state changes
+useEffect(() => {
+  if (!fieldsRegisteredRef.current) return;
+  
+  // Only sync values, don't re-register
+  const syncFields = (values: Record<string, any>) => {
+    for (const [fieldId, value] of Object.entries(values)) {
+      store.setState(fieldId, value);
+    }
+  };
+
+  syncFields(formStates);
+  for (const groupArray of Object.values(groupStates)) {
+    groupArray.forEach(syncFields);
+  }
+}, [formStates, groupStates]);
 
 
   /*
@@ -304,12 +448,21 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
 
     if (groupId !== null && groupIndex !== null) {
       validationError = validateField(field, value);
-      setGroupStates((prevState) => ({
-        ...prevState,
-        [groupId]: prevState[groupId].map((item, index) =>
-          index === groupIndex ? { ...item, [fieldId]: value } : item
-        ),
-      }));
+      setGroupStates((prevState) => {
+        const groupArray = prevState[groupId] ?? [];
+        const newGroupArray = [...groupArray];
+        if (!newGroupArray[groupIndex]) {
+          newGroupArray[groupIndex] = {};
+        }
+        newGroupArray[groupIndex] = {
+          ...newGroupArray[groupIndex],
+          [fieldId]: value,
+        };
+        return {
+          ...prevState,
+          [groupId]: newGroupArray,
+        };
+      });
     } else {
       validationError = validateField(field, value);
       setFormStates((prevState) => ({
@@ -329,11 +482,38 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
   const findGroup = (items: Item[], groupId: string): Item | undefined => {
     for (const item of items) {
       if (item.id === groupId && item.type === "group") {
-        return item; // Found the group
+        return item;
       }
+      // Nested matching
+      if (groupId.startsWith(item.id)) {
+        const rest = groupId.slice(item.id.length);
+        // If the next part is a dash and more remains, keep searching
+        if (rest.startsWith("-") && rest.length > 1) {
+          const nextId = rest.slice(1); // Remove leading dash
+          // Search in groupItems if this is a group
+          if (item.type === "group" && item.groupItems) {
+            for (const groupItem of item.groupItems) {
+              const found = findGroup(groupItem.fields, nextId);
+              if (found) return found;
+            }
+          }
+          // Search in containerItems if this is a container
+          if (item.type === "container" && item.containerItems) {
+            const found = findGroup(item.containerItems, nextId);
+            if (found) return found;
+          }
+        }
+      }
+
       if (item.type === "container" && item.containerItems) {
-        const foundGroup = findGroup(item.containerItems, groupId);
-        if (foundGroup) return foundGroup;
+        const found = findGroup(item.containerItems, groupId);
+        if (found) return found;
+      }
+      if (item.type === "group" && item.groupItems) {
+        for (const groupItem of item.groupItems) {
+          const found = findGroup(groupItem.fields, groupId);
+          if (found) return found;
+        }
       }
     }
     return undefined;
@@ -342,7 +522,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
   /*
   Function called when an item is added to a group which is a repeater.
   This is called when clicking the Add button
-  This will create one more set of states for the group with incresed index 
+  This will create one more set of states for the group with increased index 
   so that the new ones will appear on the screen
   */
   const handleAddGroupItem = (
@@ -350,20 +530,22 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
     initialData: { [key: string]: any } | null = null
   ) => {
     setFormData((prevState) => {
-      const newFormData = { ...prevState };
+      const newFormData = JSON.parse(JSON.stringify(prevState));
       const group = newFormData?.data?.items ? findGroup(newFormData.data.items, groupId) : undefined;
 
-      if (group && group.groupItems) {
+      if (group && group.groupItems && group.groupItems.length > 0) {
         const groupIndex = group.groupItems.length;
 
         // Create a deep copy of the first group item and modify its IDs
         const newGroupItem = JSON.parse(JSON.stringify(group.groupItems[0]));
         newGroupItem.fields.forEach((field: Item) => {
-          // pull back the original templateId
-          const templateld = (field as any).templateId as string;
-          const newFieldId = generateUniqueId(groupId, groupIndex, templateld);
+          const fieldWithTemplate = field as Item & { templateId?: string };
+          const templateId = fieldWithTemplate.templateId || field.id;
+          const newFieldId = generateUniqueId(groupId, groupIndex, templateId);
           field.id = newFieldId;
+          field.value = initialData?.[templateId] || initialData?.[newFieldId] || "";
         });
+
         group.groupItems.push(newGroupItem);
       }
 
@@ -371,25 +553,51 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
     });
 
     setGroupStates((prevGroupStates) => {
-      const newState = { ...prevGroupStates };
-      const newGroupItemState: { [key: string]: string } = {};
-      const group = formData?.data.items.find((item) => item.id === groupId);
-      const groupIndex = newState[groupId]?.length || 0;
-      const firstGroupItem = group?.groupItems?.[0];
+      const groupDef = findGroup(formData.data.items, groupId);
+      const groupIndex = (prevGroupStates[groupId]?.length) || 0;
+      const firstGroupItem = groupDef?.groupItems?.[0];
 
+      const newGroupItemState: { [key: string]: string } = {};
       firstGroupItem?.fields.forEach((field: Item) => {
-        // Use the saved templateId
-        const templateld = (field as any).templateId as string;
-        const newFieldId = generateUniqueId(groupId, groupIndex, templateld);
+        const fieldWithTemplate = field as Item & { templateId?: string };
+        const templateId = fieldWithTemplate.templateId || field.id;
+        const newFieldId = generateUniqueId(groupId, groupIndex, templateId);
         newGroupItemState[newFieldId] = initialData?.[newFieldId] ?? "";
       });
 
-      return {
-        ...newState,
-        [groupId]: [...(prevGroupStates[groupId] || []), newGroupItemState],
-      };
+      // Use recursive helper for nested groups
+      return updateNestedGroupState(prevGroupStates, groupId, newGroupItemState);
     });
   };
+
+    // Recursively update groupStates for nested groups
+  function updateNestedGroupState(
+    groupStates: { [key: string]: GroupState },
+    groupId: string,
+    newGroupItemState: { [key: string]: string }
+  ): { [key: string]: GroupState } {
+    if (groupStates[groupId] && Array.isArray(groupStates[groupId])) {
+      return {
+        ...groupStates,
+        [groupId]: [...groupStates[groupId], newGroupItemState],
+      };
+    }
+    const updatedGroupStates = { ...groupStates };
+    for (const key of Object.keys(updatedGroupStates)) {
+      const arr = updatedGroupStates[key];
+      if (Array.isArray(arr)) {
+        const updatedArr = arr.map((item: { [key: string]: string }) => {
+          return item;
+        });
+        updatedGroupStates[key] = updatedArr;
+      }
+    }
+    if (!updatedGroupStates[groupId]) {
+      updatedGroupStates[groupId] = [newGroupItemState];
+    }
+
+    return updatedGroupStates;
+  }
 
   /*
   Function to remove a group item from a group. Triggered on Remove button.
@@ -397,54 +605,60 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
   and the groupItem based on the index passed. Also updates the index for the rest of the groupItems
   if the removed groupItem is in between indexes
   */
-  const handleRemoveGroupItem = (groupId: string, groupItemIndex: number) => {
-    setFormData((prevState) => {
-      const newFormData = { ...prevState };
-      //const group = newFormData?.data.items.find((item) => item.id === groupId);
-      const group = newFormData?.data?.items ? findGroup(newFormData.data.items, groupId) : undefined;
+const handleRemoveGroupItem = (groupId: string, groupItemIndex: number) => {
+  setFormData((prevState) => {
+    const newFormData = JSON.parse(JSON.stringify(prevState));
+    const group = newFormData?.data?.items ? findGroup(newFormData.data.items, groupId) : undefined;
 
-      if (group && group.groupItems) {
-        group?.groupItems?.splice(groupItemIndex, 1);
-        // Update IDs for remaining group items
-        group?.groupItems?.forEach((groupItem, newIndex) => {
-          groupItem.fields.forEach((field: Item) => {
-            field.id = generateUniqueId(
-              groupId,
-              newIndex,
-              field.id.split("-").slice(2).join("-")
-            );
-          });
+    if (group && group.groupItems && group.groupItems.length > groupItemIndex) {
+      group.groupItems.splice(groupItemIndex, 1);
+
+      // Re-index and regenerate IDs for all remaining group items
+      group.groupItems.forEach((groupItem, newIndex) => {
+        groupItem.fields.forEach((field: Item) => {
+          const templateId = (field as any).templateId || field.id;
+          field.id = generateUniqueId(groupId, newIndex, templateId);
         });
-
-      }
-      return newFormData;
-    });
-
-    setGroupStates((prevGroupStates) => {
-      const newState = { ...prevGroupStates };
-      const updatedGroup = newState[groupId].filter(
-        (_, index) => index !== groupItemIndex
-      );
-
-      // Reindex the remaining items correctly
-      const reindexedGroup = updatedGroup.map((groupItem, newIndex) => {
-        const newGroupItem: { [key: string]: string } = {};
-        Object.keys(groupItem).forEach((key) => {
-          const newKey = generateUniqueId(
-            groupId,
-            newIndex,
-            key.split("-").slice(2).join("-")
-          );
-          newGroupItem[newKey] = groupItem[key];
-        });
-        return newGroupItem;
       });
-      return {
-        ...newState,
-        [groupId]: reindexedGroup,
-      };
+    }
+    return newFormData;
+  });
+
+  // Update groupStates to match the new groupItems array
+  setGroupStates((prevGroupStates) => {
+    const newState = { ...prevGroupStates };
+    const prevGroupArray = newState[groupId] || [];
+    // Remove the group item state at the specified index
+    const updatedGroupArray = prevGroupArray.filter((_, idx) => idx !== groupItemIndex);
+
+    // Get the latest group definition from formData (after removal)
+    const groupDef = findGroup(formData.data.items, groupId);
+    // Defensive: fallback to previous groupDef if not found
+    const groupItems = groupDef?.groupItems || [];
+
+    // Re-index the remaining group item states to match new field IDs
+    const reindexedGroupArray = updatedGroupArray.map((groupItemState, newIndex) => {
+      const newGroupItemState: { [key: string]: string } = {};
+      const groupFields = groupItems[newIndex]?.fields || [];
+      groupFields.forEach((field: Item) => {
+        const templateId = (field as any).templateId || field.id;
+        // Find the old key in the previous state that matches this templateId
+        const oldKey = Object.keys(groupItemState).find(k => k.endsWith(`-${templateId}`));
+        if (oldKey) {
+          newGroupItemState[field.id] = groupItemState[oldKey];
+        } else {
+          newGroupItemState[field.id] = "";
+        }
+      });
+      return newGroupItemState;
     });
-  };
+
+    return {
+      ...newState,
+      [groupId]: reindexedGroupArray,
+    };
+  });
+};
 
   /*
    Function to clear the fields in a group.Triggered on Clear button.
@@ -548,7 +762,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
 
     const visibilityCondition = item.conditions.find(condition => condition.type === 'visibility');
 
-    if (visibilityCondition) {
+    if (visibilityCondition) {  
       try {
         // If the field is in a group, pass groupStates and groupIndex
         if (groupId !== null && groupIndex !== null) {
@@ -557,18 +771,22 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
             "groupStates",
             "groupId",
             "groupIndex",
+            "isPortal",
             visibilityCondition.value
           );
 
-          return conditionFunction(formStates, groupStates, groupId, groupIndex);
+          console.log('groupId !== null, visibilityCondition.value', visibilityCondition.value, conditionFunction(formStates, groupStates, groupId, groupIndex, isPortalIntegrated)); 
+          return conditionFunction(formStates, groupStates, groupId, groupIndex, isPortalIntegrated);
         } else {
           // For non-group fields, evaluate using formStates
           const conditionFunction = new Function(
             "formStates",
             "groupStates",
+            "isPortal",
             visibilityCondition.value
           );
-          return conditionFunction(formStates, groupStates);
+          console.log('groupId == null, visibilityCondition.value', visibilityCondition.value, conditionFunction(formStates, groupStates, isPortalIntegrated)); 
+          return conditionFunction(formStates, groupStates, isPortalIntegrated);
         }
       } catch (error) {
         console.error("Error evaluating condition script:", error);
@@ -648,9 +866,10 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
           "groupStates",
           "groupId",
           "groupIndex",
+          "isPortal",
           typeCondition.value
         );
-        return typeConditionFunction(formStates, groupStates, groupId, groupIndex);
+        return typeConditionFunction(formStates, groupStates, groupId, groupIndex, isPortalIntegrated);
       } catch (error) {
         return false; // Default to false if the script fails
       }
@@ -712,6 +931,12 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
       </span>
     );
 
+    // Get existing field registration or create new one
+    let fieldMethods = store.getFieldRef(fieldId);
+    if (!fieldMethods) {
+      fieldMethods = createFieldRegistrationWrapper(fieldId, groupId || undefined, groupIndex || undefined);
+    }
+    
 
     switch (item.type) {
       case "text-input": {
@@ -1141,7 +1366,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
           />
         );
       case "text-info":
-        const textInfo = item.value || "";
+        const textInfo = item?.attributes?.content || item?.value ||"";
         return (
 
           <Component
@@ -1311,14 +1536,16 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
         );
       case "group":
         return (
-          <div key={item.id} className="group-container">
+          <div key={item.id} className="group-container" 
+          {...item.attributes}
+          >
             <div className="group-header">{item.repeater && item.label}</div>
             {item.groupItems?.map((groupItem, groupIndex) => (
               <div key={`${item.id}-${groupIndex}`} className="group-item-container">
                 {item.repeater && (<div className="group-item-header">
                   {item.repeaterItemLabel || item.label}
                   {(item.repeaterItemLabel || item.label) && ` ${groupIndex + 1}`}
-                  {item.groupItems && item.groupItems.length > 1 && (mode == "edit" || goBack || mode == "portal") && formData.readOnly != true && (
+                  {item.groupItems && item.groupItems.length > 1 && (mode == "edit" || goBack || mode == "portal" || mode == "standalone") && formData.readOnly != true && (
                     <div className="custom-buttons-no-bg no-print">
                       <Button
                         kind="ghost"
@@ -1364,7 +1591,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
                 </div>
               </div>
             ))}
-            {item.repeater && (mode == "edit" || goBack || mode == "portal") && formData.readOnly != true && (
+            {item.repeater && (mode == "edit" || goBack || mode == "portal" || mode == "standalone") && formData.readOnly != true && (
               <div className="custom-buttons-only">
                 <Button
                   kind="ghost"
@@ -2013,7 +2240,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
     window.parent.postMessage (JSON.stringify({"event": "cancel"}), "*");
   }
   const handleSubmit = async () => {
-    window.parent.postMessage (JSON.stringify({"event": "cancel"}), "*");
+    window.parent.postMessage (JSON.stringify({"event": "submit"}), "*");
   }
   const handleGenerate = async () => {
     setIsLoading(true); // Show loading overlay
@@ -2171,5 +2398,12 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
 
   );
 };
+
+// Add global type declaration for external scripts
+declare global {
+  interface Window {
+    externalFormInit?: (refsMap: { [key: string]: any }) => void;
+  }
+}
 
 export default Renderer;
