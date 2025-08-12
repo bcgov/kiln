@@ -2240,7 +2240,7 @@ const handleRemoveGroupItem = (groupId: string, groupItemIndex: number) => {
     window.parent.postMessage (JSON.stringify({"event": "cancel"}), "*");
   }
   const handleSubmit = async () => {
-    window.parent.postMessage (JSON.stringify({"event": "cancel"}), "*");
+    window.parent.postMessage (JSON.stringify({"event": "submit"}), "*");
   }
   const handleGenerate = async () => {
     setIsLoading(true); // Show loading overlay
