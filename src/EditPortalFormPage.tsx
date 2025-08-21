@@ -7,27 +7,27 @@ import { API } from "./utils/api";
 import LoadingOverlay from "./common/LoadingOverlay";
 
 
-const NewPortalFormPage: React.FC = () => {
+const EditPortalFormPage: React.FC = () => {
   const [jsonContent, setJsonContent] = useState<object>({});  
   const navigate = useNavigate();
-  const [isNewPageLoading, setIsNewPageLoading] = useState(false);
+  const [isEditPageLoading, setIsEditPageLoading] = useState(false);
 
   useEffect(() => {
-    console.log("for new endpoint in useeffect here");
+    console.log("for edit endpoint in useeffect here");
     //
      const { search, pathname } = window.location;
 
     if (search) {
       const params = Object.fromEntries(new URLSearchParams(search).entries()) as Record<string,string>;
       sessionStorage.setItem("formParams", JSON.stringify(params));
-      handleGenerateTemplate(params);
+      handleLoadTemplate(params);
       window.history.replaceState({}, document.title, pathname);
     }
     else {
       const stored = sessionStorage.getItem("formParams");
       if (stored) {
         const params = JSON.parse(stored) as Record<string,string>;
-        handleGenerateTemplate(params);
+        handleLoadTemplate(params);
       }}
   }, []);
 
@@ -38,11 +38,11 @@ const NewPortalFormPage: React.FC = () => {
     return match ? decodeURIComponent(match[1]) : null;
   }
 
-  const handleGenerateTemplate = async (params: { [key: string]: string | null }) => {
-    setIsNewPageLoading(true);
+  const handleLoadTemplate = async (params: { [key: string]: string | null }) => {
+    setIsEditPageLoading(true);
 
     try {
-      const generateDataEndpoint = API.generatePortalForm;       
+      const loadDataEndpoint = API.loadPortalForm;       
       const body: Record<string, any> = { ...params };
       const originalServer = getCookie("originalServer");
       
@@ -51,7 +51,7 @@ const NewPortalFormPage: React.FC = () => {
         ...(originalServer ? { "X-Original-Server": originalServer } : {})
       };
      
-      const response = await fetch(generateDataEndpoint, {
+      const response = await fetch(loadDataEndpoint, {
         method: "POST",
         headers,
         body: JSON.stringify(body),
@@ -60,8 +60,8 @@ const NewPortalFormPage: React.FC = () => {
         const errorData = await response.json(); // Parse error response        
         throw new Error(errorData.error || "Something went wrong");
       } else {
-        const result = await response.json();
-        setJsonContent(result.save_data);        
+        const result = await response.json();        
+        setJsonContent(result);        
       }
 
     } catch (error) {
@@ -69,16 +69,16 @@ const NewPortalFormPage: React.FC = () => {
       console.error("Failed to generate template:", error);
     }
     finally {
-      setIsNewPageLoading(false);
+      setIsEditPageLoading(false);
     }
   };
 
   return (
     <>
-      <LoadingOverlay isLoading={isNewPageLoading} message="Please wait while the form is being loaded." />
+      <LoadingOverlay isLoading={isEditPageLoading} message="Please wait while the form is being loaded." />
       <Presenter data={jsonContent} mode="portal" />
     </>
   );
 };
 
-export default NewPortalFormPage
+export default EditPortalFormPage

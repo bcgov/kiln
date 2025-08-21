@@ -1,0 +1,32 @@
+# Stage 1: Build dependencies
+FROM node:20 as deps
+WORKDIR /app
+COPY package.json package-lock.json* ./
+RUN npm ci
+
+# Stage 2: Copy source
+FROM node:20 as build-src
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+
+# Stage 3: Runtime container with build-on-start
+FROM node:20-alpine
+WORKDIR /app
+
+# Copy app source and deps
+COPY --from=build-src /app .
+
+# Copy a startup script
+COPY entrypoint.sh .
+COPY server.js .
+
+# Make executable
+RUN chmod +x ./entrypoint.sh \
+    && chmod -R g+w /app
+
+# Expose port
+EXPOSE 8080
+
+# Use the entrypoint that builds at runtime with pod env vars
+CMD ["./entrypoint.sh"]
