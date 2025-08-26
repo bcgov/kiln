@@ -221,7 +221,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
         script.id = scriptId;
         script.textContent = scriptContent;
         document.head.appendChild(script);
-      }, 1500);
+      }, 2000);
     }
 
     // Cleanup on unmount
