@@ -216,10 +216,12 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
       document.head.appendChild(style);
     }
     if (scriptContent) {
-      const script = document.createElement('script');
-      script.id = scriptId;
-      script.textContent = scriptContent;
-      document.head.appendChild(script);
+      setTimeout(() => {
+        const script = document.createElement('script');
+        script.id = scriptId;
+        script.textContent = scriptContent;
+        document.head.appendChild(script);
+      }, 2000);
     }
 
     // Cleanup on unmount
