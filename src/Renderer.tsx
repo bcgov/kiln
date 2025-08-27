@@ -193,9 +193,10 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
   const pdfFormScript = getByType(scripts, 'pdf');
 
   useEffect(() => {
-    const mode = isPrinting ? 'pdf' : 'web';
-    const styleId = `${mode}-form-styles`;
-    const scriptId = `${mode}-form-script`;
+    const modeScript = isPrinting ? 'pdf' : 'web';
+    const modeStyle = (isPrinting && pdfStyleSheet != undefined) ? 'pdf' : 'web';
+    const styleId = `${modeStyle}-form-styles`;
+    const scriptId = `${modeScript}-form-script`;
 
     // Remove any existing style/script tags for both modes
     ['web', 'pdf'].forEach((m) => {
