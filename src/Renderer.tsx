@@ -193,9 +193,10 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
   const pdfFormScript = getByType(scripts, 'pdf');
 
   useEffect(() => {
-    const mode = isPrinting ? 'pdf' : 'web';
-    const styleId = `${mode}-form-styles`;
-    const scriptId = `${mode}-form-script`;
+    const modeScript = (isPrinting && pdfFormScript != undefined) ? 'pdf' : 'web';
+    const modeStyle = (isPrinting && pdfStyleSheet != undefined) ? 'pdf' : 'web';
+    const styleId = `${modeStyle}-form-styles`;
+    const scriptId = `${modeScript}-form-script`;
 
     // Remove any existing style/script tags for both modes
     ['web', 'pdf'].forEach((m) => {
@@ -206,8 +207,8 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
     });
 
     // Add current mode's style/script if present
-    const styleContent = mode === 'pdf' ? pdfStyleSheet : webStyleSheet;
-    const scriptContent = mode === 'pdf' ? pdfFormScript : webFormScript;
+    const styleContent = modeStyle === 'pdf' ? pdfStyleSheet : webStyleSheet;
+    const scriptContent = modeScript === 'pdf' ? pdfFormScript : webFormScript;
 
     if (styleContent) {
       const style = document.createElement('style');
@@ -216,10 +217,12 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
       document.head.appendChild(style);
     }
     if (scriptContent) {
-      const script = document.createElement('script');
-      script.id = scriptId;
-      script.textContent = scriptContent;
-      document.head.appendChild(script);
+      setTimeout(() => {
+        const script = document.createElement('script');
+        script.id = scriptId;
+        script.textContent = scriptContent;
+        document.head.appendChild(script);
+      }, 2000);
     }
 
     // Cleanup on unmount
