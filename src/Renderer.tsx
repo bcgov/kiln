@@ -114,6 +114,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
   const [modalTitle, setModalTitle] = useState("KILN");
   const [modalMessage, setModalMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isScriptRenderReady, setIsScriptRenderReady] = useState(false);
 
   // Create Initial field registration in external store
   const createFieldRegistrationWrapper = (fieldId: string, groupId?: string, groupIndex?: number) => {
@@ -216,13 +217,11 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
       style.textContent = styleContent;
       document.head.appendChild(style);
     }
-    if (scriptContent) {
-      setTimeout(() => {
-        const script = document.createElement('script');
-        script.id = scriptId;
-        script.textContent = scriptContent;
-        document.head.appendChild(script);
-      }, 2000);
+    if (scriptContent && isScriptRenderReady) {
+      const script = document.createElement('script');
+      script.id = scriptId;
+      script.textContent = scriptContent;
+      document.head.appendChild(script);
     }
 
     // Cleanup on unmount
@@ -232,7 +231,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
       const script = document.getElementById(scriptId);
       if (script) script.remove();
     };
-  }, [isPrinting, webStyleSheet, pdfStyleSheet, webFormScript, pdfFormScript]);
+  }, [isPrinting, webStyleSheet, pdfStyleSheet, webFormScript, pdfFormScript, isScriptRenderReady]);
 
   //on close, execute unlock form
   useEffect(() => {
@@ -385,6 +384,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
     setFormStates(initialFormStates);
     setGroupStates(initialGroupStates);
     setFormData(updatedFormData);
+    setIsScriptRenderReady(true);
   }, [data]);
 
 // Add a ref to track if fields are already registered
