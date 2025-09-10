@@ -50,16 +50,12 @@ const NewPortalFormPage: React.FC = () => {
         "Content-Type": "application/json",
         ...(originalServer ? { "X-Original-Server": originalServer } : {})
       };
-      console.log("requesting endpoint:", generateDataEndpoint);
-      console.log("headers:", headers);
-      console.log("body:", body);
   
       const response = await fetch(generateDataEndpoint, {
         method: "POST",
         headers,
         body: JSON.stringify(body),
       });
-      console.log("response:", response);
       if (!response.ok) {
         const errorData = await response.json(); // Parse error response        
         throw new Error(errorData.error || "Something went wrong");
