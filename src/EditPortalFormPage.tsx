@@ -5,6 +5,7 @@ import "@carbon/styles/css/styles.css";
 import { useNavigate } from 'react-router-dom';
 import { API } from "./utils/api";
 import LoadingOverlay from "./common/LoadingOverlay";
+import { jwtDecode } from "jwt-decode";
 
 
 const EditPortalFormPage: React.FC = () => {
@@ -43,7 +44,13 @@ const EditPortalFormPage: React.FC = () => {
 
     try {
       const loadDataEndpoint = API.loadPortalForm;       
-      const body: Record<string, any> = { ...params };
+      const session = getCookie("session");
+      const userId = session ? jwtDecode<{ userId: string }>(session).userId : undefined;  
+
+      const body: Record<string, any> = { 
+        ...params,
+        ...(userId ? { userId } : {}) 
+      };
       const originalServer = getCookie("originalServer");
       
       const headers: Record<string, string> = {

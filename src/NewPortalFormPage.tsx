@@ -5,7 +5,7 @@ import "@carbon/styles/css/styles.css";
 import { useNavigate } from 'react-router-dom';
 import { API } from "./utils/api";
 import LoadingOverlay from "./common/LoadingOverlay";
-
+import { jwtDecode } from "jwt-decode";
 
 const NewPortalFormPage: React.FC = () => {
   const [jsonContent, setJsonContent] = useState<object>({});  
@@ -42,8 +42,14 @@ const NewPortalFormPage: React.FC = () => {
     setIsNewPageLoading(true);
 
     try {
-      const generateDataEndpoint = API.generatePortalForm;       
-      const body: Record<string, any> = { ...params };
+      const generateDataEndpoint = API.generatePortalForm;   
+      const session = getCookie("session");
+      const userId = session ? jwtDecode<{ userId: string }>(session).userId : undefined;  
+
+      const body: Record<string, any> = { 
+        ...params,
+        ...(userId ? { userId } : {}) 
+      };
       const originalServer = getCookie("originalServer");
       
       const headers: Record<string, string> = {
