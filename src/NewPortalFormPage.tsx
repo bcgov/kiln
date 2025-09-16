@@ -50,7 +50,7 @@ const NewPortalFormPage: React.FC = () => {
         "Content-Type": "application/json",
         ...(originalServer ? { "X-Original-Server": originalServer } : {})
       };
-     
+  
       const response = await fetch(generateDataEndpoint, {
         method: "POST",
         headers,

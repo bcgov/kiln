@@ -17,6 +17,7 @@ import { Routes, Route, useLocation } from "react-router-dom";
 import { initializeKeycloak } from "./keycloak";
 import { PrivateRoute } from "./PrivateRoute";
 import EditPortalFormPage from "./EditPortalFormPage";
+import ViewPortalFormPage from "./ViewPortalFormPage";
 import ExternalPreviewPage from "./ExternalPreviewPage";
 import { ExternalStateProvider } from './ExternalStateContext';
 
@@ -86,7 +87,7 @@ const App: React.FC = () => {
             <>
             <Route path="/new" element={<NewPortalFormPage/>}/>
             <Route path="/edit" element={<EditPortalFormPage />} />
-            <Route path="/view" element={<PrivateRoute><ViewFormPage /></PrivateRoute>} />
+            <Route path="/view" element={<ViewPortalFormPage/>} />
             </>
 
           ):(
