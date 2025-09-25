@@ -27,8 +27,11 @@ export const API = {
   pdfTemplate:  getApiUrl("/pdfRender", import.meta.env.VITE_COMM_API_PDFTEMPLATE_ENDPOINT_URL),
   generatePortalForm: getApiUrl("/generatePortalForm", import.meta.env.VITE_COMM_API_GENERATE_PORTAL_FORM_ENDPOINT_URL),
   generateStandalone: getApiUrl("/generateStandalone", import.meta.env.VITE_COMM_API_GENERATE_STANDALONE_ENDPOINT_URL),  
-  submitForButtonAction: getApiUrl("/submitForPortalAction", import.meta.env.VITE_COMM_API_SUBMIT_TO_ACTION_ENDPOINT_URL),
+  saveButtonAction: getApiUrl("/saveForPortalAction", import.meta.env.VITE_COMM_API_SUBMIT_TO_ACTION_ENDPOINT_URL),
   loadPortalForm: getApiUrl("/loadPortalForm", import.meta.env.VITE_COMM_API_LOAD_PORTAL_FORM_ENDPOINT_URL),
+  interface: getApiUrl("/interface", import.meta.env.VITE_COMM_API_INTERFACE_URL),
+  submitButtonAction: getApiUrl("/submitForPortalAction", import.meta.env.VITE_COMM_API_SUBMIT_NET_PORTAL_URL),
+  cancelButtonAction: getApiUrl("/cancelForPortalAction", import.meta.env.VITE_COMM_API_CANCEL_NET_PORTAL_URL),
   getFormById: `${getKlammApiBaseUrl()}/api/form-versions/`,
   getFormKlammURL: `${getKlammApiBaseUrl()}/forms/form-versions/`,
 };
