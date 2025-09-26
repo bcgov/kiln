@@ -2200,6 +2200,7 @@ const handleRemoveGroupItem = (groupId: string, groupItemIndex: number) => {
         ...bodyFromAction,
         path: action?.path,
         headers: action?.headers,
+        type: action?.type,
       };
   
   
