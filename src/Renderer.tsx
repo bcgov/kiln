@@ -2193,7 +2193,7 @@ const handleRemoveGroupItem = (groupId: string, groupItemIndex: number) => {
         ...(originalServer ? { "X-Original-Server": originalServer } : {}),
       };
   
-      const endpoint = eval(action.path);
+      const endpoint = eval(action.api_path);
       const bodyFromAction = eval(`(() => ({ ${action.body} }))()`);
 
       const body = {
