@@ -2194,7 +2194,14 @@ const handleRemoveGroupItem = (groupId: string, groupItemIndex: number) => {
       };
   
       const endpoint = eval(action.path);
-      const body = eval(`(() => ({ ${action.body} }))()`);
+      const bodyFromAction = eval(`(() => ({ ${action.body} }))()`);
+
+      const body = {
+        ...bodyFromAction,
+        path: action?.path,
+        headers: action?.headers,
+      };
+  
   
       const response = await fetch(endpoint, {
         method: action.type,
