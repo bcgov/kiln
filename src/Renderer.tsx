@@ -91,7 +91,8 @@ interface RendererProps {
   goBack?: () => void; // Add a goBack prop
 }
 
-
+const visibleForMode = (btn: any, activeMode: string) =>
+  !Array.isArray(btn.mode) || btn.mode.includes(activeMode);
 
 const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
   const { store } = useExternalState();
@@ -117,6 +118,8 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
   const [modalMessage, setModalMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isScriptRenderReady, setIsScriptRenderReady] = useState(false);
+  const [formInterface, setFormInterface] = useState<InterfaceElement[] | null>(null);
+
 
   // Create Initial field registration in external store
   const createFieldRegistrationWrapper = (fieldId: string, groupId?: string, groupIndex?: number) => {
@@ -750,6 +753,37 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
     });
   };
 
+  useEffect(() => {
+    // Prefer interface from formData
+    const fromFD = (formData as any)?.interface;
+    if (Array.isArray(fromFD) && fromFD.length > 0) {
+      setFormInterface(fromFD);
+      return;
+    }
+  
+    // Otherwise, try sessionStorage
+    const sessionInterface = sessionStorage.getItem("interface");
+    if (!sessionInterface) {
+      setFormInterface(null);
+      return;
+    }
+  
+    try {
+      const parsed = JSON.parse(sessionInterface);
+      setFormInterface(Array.isArray(parsed?.interface) ? parsed.interface : null);
+    } catch {
+      setFormInterface(null);
+    }
+  }, [formData]);
+  
+  
+
+  function getCookie(name: string): string | null {
+    const match = document.cookie.match(
+      new RegExp('(?:^|; )' + name.replace(/([.$?*|{}()[\]\\/+^])/g, '\\$1') + '=([^;]*)')
+    );
+    return match ? decodeURIComponent(match[1]) : null;
+  }
 
   /*
   Function to verify whether the state of the element should be included in savedJson or not.
@@ -2199,71 +2233,88 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
     }
   };
 
-  const onButtonClick = async (buttonConfig: InterfaceElement) => {
-    // This is your parent-level logic
-    console.log("Button clicked:", buttonConfig.label);
-    console.log("Current form data:", buttonConfig);
-    // Perhaps call the backend, show a notification, etc.
-
-    setIsLoading(true); // Show loading overlay
-    setModalOpen(false); // Ensure modal is closed when a new request starts
+  const executeJavascriptAction = async (script?: string) => {
+    if (!script) return true;
     try {
-      if (validateAllFields()) {
-        const returnMessage = await submitForButtonAction(buttonConfig);
-        if ((returnMessage) === "success") {
-          setModalTitle("Success ✅");
-          setModalMessage("Form Saved Successfully.");
-        } else {
-          setModalTitle("Error ❌ ");
-          setModalMessage(returnMessage);
-        }
-        setModalOpen(true);
-      } else {
-        setModalTitle("Validation Error ❌ ");
-        setModalMessage("Error saving form. Please clear the errors in the form before saving.");
-        setModalOpen(true);
-      }
+      const wrapped = `(async () => { ${script} })()`;
+      const result = await eval(wrapped);
+      return result !== false;
     } catch (error) {
-      setModalTitle("Error ❌ ");
-      setModalMessage("Error saving form. Please try again.");
+      console.error("JavaScript action failed:", error);
+      setModalTitle("Error");
+      setModalMessage("Client script failed.");
       setModalOpen(true);
-    }
-    finally {
-      setIsLoading(false); // Hide loading overlay once request completes
+      return false;
     }
   };
 
-  const submitForButtonAction = async (buttonConfig: InterfaceElement) => {
+  const executeApiAction = async (action: any) => {
     try {
-      const submitForActionEndpoint = API.submitForButtonAction;
       const state = sessionStorage.getItem("formParams");
-      const params = state ? (JSON.parse(state) as Record<string, string>) : {};
-      const savedJson: Record<string, any> = {
-        "tokenId": params["id"],
-        "savedForm": JSON.stringify(createSavedData()),
-        "config": buttonConfig
+      const params = state ? JSON.parse(state) as Record<string, string> : {};
+      const originalServer = getCookie("originalServer");
+      void params;
+  
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+        ...(originalServer ? { "X-Original-Server": originalServer } : {}),
       };
+  
+      const endpoint = eval(action.api_path);
+      const bodyFromAction = eval(`(() => ({ ${action.body} }))()`);
 
-      const response = await fetch(submitForActionEndpoint, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(savedJson),
+      const body = {
+        ...bodyFromAction,
+        path: action?.path,
+        headers: action?.headers,
+        type: action?.type,
+      };
+  
+  
+      const response = await fetch(endpoint, {
+        method: action.type,
+        headers,
+        body: JSON.stringify(body),
       });
-      if (response.ok) {
-        const result = await response.json();
-        console.log("Result ", result);
-        return "success";
-      } else {
-        const errorData = await response.json(); // Parse error response        
-        //throw new Error(errorData.error || "Something went wrong");
-        console.error("Error:", errorData.error);
-        return errorData?.error || "Error saving form. Please try again.";
+  
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error("API error:", errorData?.error);
+        return false;
       }
+  
+      return true;
     } catch (error) {
-      console.error("Error:", error);
-      return "failed";
+      console.error("API action failed:", error);
+      return false;
+    }
+  };
+  
+  
+
+  const onButtonClick = async (buttonConfig: InterfaceElement) => {
+    const actions = (buttonConfig as any)?.actions || [];
+    if (!Array.isArray(actions) || actions.length === 0) return;
+  
+    setIsLoading(true);
+    setModalOpen(false); 
+    try {
+      for (const action of actions) {
+        if (action.action_type === "javascript") {
+          const succeeded = await executeJavascriptAction(action.script);
+          if (succeeded === false) break;
+        } else if (action.action_type === "endpoint") {
+          const succeeded = await executeApiAction(action);
+          if (!succeeded) break; 
+        } else {
+          setModalTitle("Error");
+          setModalMessage(`Unknown action type: ${String(action.action_type)}`);
+          setModalOpen(true);
+          break;
+        }
+      }
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -2368,6 +2419,9 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
                   <Button onClick={handleSaveAndClose} kind="secondary" className="no-print" id="saveAndClose">
                     Save And Close
                   </Button>
+                  <Button kind="secondary" onClick={handlePrint} className="no-print">
+                Print
+              </Button>
 
                 </>
               )}
@@ -2375,7 +2429,17 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
                 <>
                   <Button onClick={handleGenerate} kind="secondary" className="no-print" id="generate">
                     Generate
-                  </Button>
+                  </Button>    
+                  <Button kind="secondary" onClick={handlePrint} className="no-print">
+                Print
+              </Button>              
+                </>
+              )}
+              {mode == "view" && (
+                <>        
+                  <Button kind="secondary" onClick={handlePrint} className="no-print">
+                      Print
+                  </Button>       
                 </>
               )}
               {(mode == "previewPortal") && (
@@ -2389,16 +2453,47 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
                 </>
               )}
 
-              {(mode == "portal" || goBack) && formData.interface && (
+            {(mode === "portalNew" || goBack) && formInterface && (
                 <div className="header-buttons-only no-print">
-                  {formData.interface?.map((btn: any, idx: any) => (
-                    <ButtonRenderer
-                      key={idx}
-                      config={btn}
-                      onButtonClick={onButtonClick}
-                      disabled={typeof goBack === 'function'}   // Now matches single-arg signature
-                    />
-                  ))}
+                  {formInterface
+                    .filter((btn: any) => visibleForMode(btn, mode))
+                    .map((btn: InterfaceElement, idx: number) => (
+                      <ButtonRenderer
+                        key={idx}
+                        config={btn}
+                        onButtonClick={onButtonClick}
+                        disabled={typeof goBack === "function"}
+                      />
+                    ))}
+                </div>
+              )}
+            
+            {(mode === "portalEdit" || goBack) && formInterface && (
+                <div className="header-buttons-only no-print">
+                  {formInterface
+                    .filter((btn: any) => visibleForMode(btn, mode))
+                    .map((btn: InterfaceElement, idx: number) => (
+                      <ButtonRenderer
+                        key={idx}
+                        config={btn}
+                        onButtonClick={onButtonClick}
+                        disabled={typeof goBack === "function"}
+                      />
+                    ))}
+                </div>
+              )}
+              {(mode === "portalView" || goBack) && formInterface && (
+                <div className="header-buttons-only no-print">
+                  {formInterface
+                    .filter((btn: any) => visibleForMode(btn, mode))
+                    .map((btn: InterfaceElement, idx: number) => (
+                      <ButtonRenderer
+                        key={idx}
+                        config={btn}
+                        onButtonClick={onButtonClick}
+                        disabled={typeof goBack === "function"}
+                      />
+                    ))}
                 </div>
               )}
               {goBack && (
@@ -2406,10 +2501,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
                   Back
                 </Button>
               )}
-
-              <Button kind="secondary" onClick={handlePrint} className="no-print">
-                Print
-              </Button>
+              
             </div>
             <div className="form-title hidden-on-screen">
               <div className="header-form-id-print ">{formData.form_id}</div>
