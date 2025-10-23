@@ -948,7 +948,7 @@ const handleRemoveGroupItem = (groupId: string, groupItemIndex: number) => {
     groupIndex: number | null = null
   ) => {
 
-    const Component = componentMapping[item.type];
+    const Component = componentMapping[item?.type];
     if (!Component) return null;
 
     const calcValExists = executeCalculatedValueAndSetIfExists(item, groupId, groupIndex);
@@ -1577,7 +1577,7 @@ const handleRemoveGroupItem = (groupId: string, groupItemIndex: number) => {
           {...item.attributes}
           >
             <div className="group-header">{item.repeater && item.label}</div>
-            {item.groupItems?.map((groupItem, groupIndex) => (
+            {item?.groupItems?.map((groupItem, groupIndex) => (
               <div key={`${item.id}-${groupIndex}`} className="group-item-container">
                 {item.repeater && (<div className="group-item-header">
                   {item.repeaterItemLabel || item.label}
@@ -1646,13 +1646,13 @@ const handleRemoveGroupItem = (groupId: string, groupItemIndex: number) => {
 
         return (
           <>
-            <div key={item.id}
-              id={item.id}
+            <div key={item?.id}
+              id={item?.id}
               className={item?.attributes?.containerType == 'page' ? "page-container" : item?.attributes?.containerType == 'section' ? "section-container" : "common-container"}
               style={{
-                ...(isPrinting ? item.pdfStyles : item.webStyles),
+                ...(isPrinting ? item?.pdfStyles : item?.webStyles),
               }}
-              {...item.attributes}
+              {...item?.attributes}
             >
               <div className="group-header"
                 style={{
@@ -1661,19 +1661,19 @@ const handleRemoveGroupItem = (groupId: string, groupItemIndex: number) => {
                   justifyContent: 'space-between',
                 }}
               >
-                {item.label}
-                {item.containerItems && item.clear_button && (mode == "edit" || goBack) && formData.readOnly != true && (
+                {item?.label}
+                {item?.containerItems && item?.clear_button && (mode == "edit" || goBack) && formData.readOnly != true && (
                   <div className="custom-buttons-no-bg no-print">
                     <Button
                       kind="ghost"
-                      onClick={() => handleClearContainer(item.id)}
+                      onClick={() => handleClearContainer(item?.id)}
                       className="no-print"
                     >
                       Clear
                     </Button>
                   </div>
                 )}</div>
-              {item.containerItems?.filter(containerItem => !isHidden(containerItem)).map((containerItem) => (
+              {item?.containerItems?.filter(containerItem => !isHidden(containerItem)).map((containerItem) => (
                 <div
                   key={containerItem.id}
                   style={applyWrapperStyles(containerItem)}
@@ -1786,7 +1786,9 @@ const handleRemoveGroupItem = (groupId: string, groupItemIndex: number) => {
       });
     };
   
-    processItems(formData.data.items);
+    if (formData?.data?.items) {
+      processItems(formData.data.items);
+    }
   
     return { data: payload };
   };
@@ -2471,11 +2473,11 @@ const handleRemoveGroupItem = (groupId: string, groupItemIndex: number) => {
           <LoadingOverlay isLoading={isLoading} message="Please wait while the form is being saved." />
           <FlexGrid>
             <Row >
-              {formData.data.items.filter(item => !isHidden(item)).map(item => (
+              {formData?.data?.items?.filter(item => !isHidden(item)).map(item => (
                 <div
-                  key={item.id}
+                  key={item?.id}
                   style={applyWrapperStyles(item)}
-                  data-print-columns={item.pdfStyles?.printColumns || 4}
+                  data-print-columns={item?.pdfStyles?.printColumns || 4}
                 >
                   {renderComponent(item)}
                 </div>
