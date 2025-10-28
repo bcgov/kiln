@@ -116,10 +116,14 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
   const [modalOpen, setModalOpen] = useState(false);
   const [modalTitle, setModalTitle] = useState("KILN");
   const [modalMessage, setModalMessage] = useState("");
+  const [modalPrimaryButton, setPrimaryButton] = useState("");
+  const [modalSecondaryButton, setSecondaryButton] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isScriptRenderReady, setIsScriptRenderReady] = useState(false);
   const [formInterface, setFormInterface] = useState<InterfaceElement[] | null>(null);
 
+  const primaryActionRef = useRef<() => void>(() => setModalOpen(false));
+  const secondaryActionRef = useRef<() => void>(() => setModalOpen(false));
 
   // Create Initial field registration in external store
   const createFieldRegistrationWrapper = (fieldId: string, groupId?: string, groupIndex?: number) => {
@@ -959,7 +963,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
     groupIndex: number | null = null
   ) => {
 
-    const Component = componentMapping[item.type];
+    const Component = componentMapping[item?.type];
     if (!Component) return null;
 
     const calcValExists = executeCalculatedValueAndSetIfExists(item, groupId, groupIndex);
@@ -1018,7 +1022,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
         const readOnly = formData.readOnly ||
           doesFieldHasCondition("readOnly", item, groupId, groupIndex) ||
           calcValExists ||
-          mode === "view";
+          mode === "view" || mode === "portalView";
 
         const validationProps = {
           required: isRequired,
@@ -1169,7 +1173,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
               style={{
                 ...(isPrinting ? item.pdfStyles : item.webStyles),
               }}
-              readOnly={formData.readOnly || doesFieldHasCondition("readOnly", item, groupId, groupIndex) || calcValExists || mode == "view"}
+              readOnly={formData.readOnly || doesFieldHasCondition("readOnly", item, groupId, groupIndex) || calcValExists || mode == "view" || mode == "portalView"}
               invalid={!!error}
               invalidText={error || ""}
             />
@@ -1207,7 +1211,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
                   const isChecked = event.target.checked;
                   handleInputChange(fieldId, isChecked, groupId, groupIndex, item);
                 }}
-                readOnly={formData.readOnly || doesFieldHasCondition("readOnly", item, groupId, groupIndex) || calcValExists || mode == "view"}
+                readOnly={formData.readOnly || doesFieldHasCondition("readOnly", item, groupId, groupIndex) || calcValExists || mode == "view" || mode == "portalView"}
                 invalid={!!error}
                 invalidText={error || ""}
               />
@@ -1252,7 +1256,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
               onToggle={(checked: boolean) =>
                 handleInputChange(fieldId, checked, groupId, groupIndex, item)
               }
-              readOnly={formData.readOnly || doesFieldHasCondition("readOnly", item, groupId, groupIndex) || calcValExists || mode == "view"}
+              readOnly={formData.readOnly || doesFieldHasCondition("readOnly", item, groupId, groupIndex) || calcValExists || mode == "view" || mode == "portalView"}
               invalid={!!error}
               invalidText={error || ""}
 
@@ -1304,7 +1308,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
                 ...(isPrinting ? item.pdfStyles : item.webStyles),
               }}
               dateFormat={dateFormat}
-              readOnly={formData.readOnly || doesFieldHasCondition("readOnly", item, groupId, groupIndex) || calcValExists || mode == "view"}
+              readOnly={formData.readOnly || doesFieldHasCondition("readOnly", item, groupId, groupIndex) || calcValExists || mode == "view" || mode == "portalView"}
               invalid={!!error}
               invalidText={error || ""}
 
@@ -1313,7 +1317,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
                 id={fieldId}
                 placeholder={item.placeholder}
                 labelText={label}
-                readOnly={formData.readOnly || doesFieldHasCondition("readOnly", item, groupId, groupIndex) || calcValExists || mode == "view"}
+                readOnly={formData.readOnly || doesFieldHasCondition("readOnly", item, groupId, groupIndex) || calcValExists || mode == "view" || mode == "portalView"}
                 invalid={!!error}
                 invalidText={error || ""}
                 helperText={item.helperText}
@@ -1378,7 +1382,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
               style={{
                 ...(isPrinting ? item.pdfStyles : item.webStyles),
               }}
-              readOnly={readOnly}
+              readOnly={formData.readOnly || doesFieldHasCondition("readOnly", item, groupId, groupIndex) || calcValExists || mode == "view" || mode == "portalView"}
               invalid={!!error}
               invalidText={error || ""}
               required={isRequired}
@@ -1537,7 +1541,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
                     ? groupStates[groupId]?.[groupIndex!]?.[fieldId]
                     : formStates[fieldId]
                 }
-                readOnly={formData.readOnly || doesFieldHasCondition("readOnly", item, groupId, groupIndex) || calcValExists || mode == "view"}
+                readOnly={formData.readOnly || doesFieldHasCondition("readOnly", item, groupId, groupIndex) || calcValExists || mode == "view" || mode == "portalView"}
                 invalid={!!error}
                 invalidText={error || ""}
               >
@@ -1629,7 +1633,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
             {...item.attributes}
           >
             <div className="group-header">{item.repeater && item.label}</div>
-            {item.groupItems?.map((groupItem, groupIndex) => (
+            {item?.groupItems?.map((groupItem, groupIndex) => (
               <div key={`${item.id}-${groupIndex}`} className="group-item-container">
                 {item.repeater && (<div className="group-item-header">
                   {item.repeaterItemLabel || item.label}
@@ -1698,13 +1702,13 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
 
         return (
           <>
-            <div key={item.id}
-              id={item.id}
+            <div key={item?.id}
+              id={item?.id}
               className={item?.attributes?.containerType == 'page' ? "page-container" : item?.attributes?.containerType == 'section' ? "section-container" : "common-container"}
               style={{
-                ...(isPrinting ? item.pdfStyles : item.webStyles),
+                ...(isPrinting ? item?.pdfStyles : item?.webStyles),
               }}
-              {...item.attributes}
+              {...item?.attributes}
             >
               <div className="group-header"
                 style={{
@@ -1713,19 +1717,19 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
                   justifyContent: 'space-between',
                 }}
               >
-                {item.label}
-                {item.containerItems && item.clear_button && (mode == "edit" || goBack) && formData.readOnly != true && (
+                {item?.label}
+                {item?.containerItems && item?.clear_button && (mode == "edit" || goBack) && formData.readOnly != true && (
                   <div className="custom-buttons-no-bg no-print">
                     <Button
                       kind="ghost"
-                      onClick={() => handleClearContainer(item.id)}
+                      onClick={() => handleClearContainer(item?.id)}
                       className="no-print"
                     >
                       Clear
                     </Button>
                   </div>
                 )}</div>
-              {item.containerItems?.filter(containerItem => !isHidden(containerItem)).map((containerItem) => (
+              {item?.containerItems?.filter(containerItem => !isHidden(containerItem)).map((containerItem) => (
                 <div
                   key={containerItem.id}
                   style={applyWrapperStyles(containerItem)}
@@ -1837,9 +1841,11 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
         }
       });
     };
-
-    processItems(formData.data.items);
-
+  
+    if (formData?.data?.items) {
+      processItems(formData.data.items);
+    }
+  
     return { data: payload };
   };
 
@@ -2232,6 +2238,35 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
       console.error("Error during print:", error);
     }
   };
+ 
+  (window as any).confirmModal = async () => {
+    const message = `
+    Do you want to submit this form?
+  
+    If you answer "No", you will be able to return to this form later and enter more responses.
+    If you answer "Yes", the form will no longer be editable.
+    `;
+  
+    return await new Promise<boolean>((resolve) => {
+      setModalTitle("Confirmation");
+      setModalMessage(message.trim());
+      setPrimaryButton("Yes");
+      setSecondaryButton("No");
+      primaryActionRef.current = () => { 
+        setModalOpen(false); 
+        setPrimaryButton("");
+        setSecondaryButton("");
+        resolve(true); 
+      };
+      secondaryActionRef.current = () => { 
+        setModalOpen(false); 
+        setPrimaryButton("");
+        setSecondaryButton("");
+        resolve(false); 
+      };
+      setModalOpen(true);
+    });
+  };
 
   const executeJavascriptAction = async (script?: string) => {
     if (!script) return true;
@@ -2296,7 +2331,6 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
     const actions = (buttonConfig as any)?.actions || [];
     if (!Array.isArray(actions) || actions.length === 0) return;
   
-    setIsLoading(true);
     setModalOpen(false); 
     try {
       for (const action of actions) {
@@ -2304,6 +2338,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
           const succeeded = await executeJavascriptAction(action.script);
           if (succeeded === false) break;
         } else if (action.action_type === "endpoint") {
+          setIsLoading(true);
           const succeeded = await executeApiAction(action);
           if (!succeeded) break; 
         } else {
@@ -2538,16 +2573,20 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
             message={modalMessage}
             isOpen={modalOpen}
             onClose={() => setModalOpen(false)}
+            primaryText={modalPrimaryButton || undefined}
+            secondaryText={modalSecondaryButton || undefined}
+            onPrimary={() => primaryActionRef.current()}
+            onSecondary={() => secondaryActionRef.current()}
           />
           {/* Loading overlay when API call is in progress */}
           <LoadingOverlay isLoading={isLoading} message="Please wait while the form is being saved." />
           <FlexGrid>
             <Row >
-              {formData.data.items?.filter(item => !isHidden(item))?.map(item => (
+              {formData?.data?.items?.filter(item => !isHidden(item)).map(item => (
                 <div
-                  key={item.id}
+                  key={item?.id}
                   style={applyWrapperStyles(item)}
-                  data-print-columns={item.pdfStyles?.printColumns || 4}
+                  data-print-columns={item?.pdfStyles?.printColumns || 4}
                 >
                   {renderComponent(item)}
                 </div>
