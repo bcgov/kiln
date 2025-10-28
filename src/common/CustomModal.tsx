@@ -6,17 +6,24 @@ interface CustomModalProps {
   message: string;
   isOpen: boolean;
   onClose: () => void;
+  primaryText?: string;
+  secondaryText?: string;
+  onPrimary?: () => void;
+  onSecondary?: () => void;
 }
 
-const CustomModal: React.FC<CustomModalProps> = ({ title, message, isOpen, onClose }) => {
+
+const CustomModal: React.FC<CustomModalProps> = ({ title, message, isOpen, onClose, primaryText, secondaryText,onPrimary,onSecondary }) => {
   return (
     <Modal
-      open={isOpen}
-      modalHeading={title}
-      //primaryButtonText="OK"
-      onRequestClose={onClose}
-      onRequestSubmit={onClose}
-      passiveModal // Removes default buttons     
+    open={isOpen}
+    modalHeading={title}
+    passiveModal={!primaryText && !secondaryText}
+    primaryButtonText={primaryText}
+    secondaryButtonText={secondaryText}
+    onRequestClose={onClose}
+    onRequestSubmit={onPrimary ?? onClose}
+    onSecondarySubmit={onSecondary}     
     >
       <div >  
       <p>{message}</p>

@@ -466,3 +466,9 @@ h1 {
       @include button-style( null, null ,#2D2D2D);
     }
 }
+
+.cds--modal-footer .cds--btn { 
+  justify-content: center; 
+  align-items: center;
+  padding: 1rem !important;
+}
