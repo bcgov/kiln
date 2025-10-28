@@ -1357,7 +1357,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
           handleInputChange(fieldId, next, groupId, groupIndex, item);
         };
 
-        const readOnly = formData.readOnly || doesFieldHasCondition("readOnly", item, groupId, groupIndex) || calcValExists || mode == "view" || mode == "portalView";
+        const readOnly = formData.readOnly || doesFieldHasCondition("readOnly", item, groupId, groupIndex) || executeCalculatedValueAndSetIfExists(item, groupId, groupIndex) || calcValExists || mode == "view" || mode == "portalView";
 
         return (
 
