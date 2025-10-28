@@ -764,14 +764,14 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
       setFormInterface(fromFD);
       return;
     }
-  
+
     // Otherwise, try sessionStorage
     const sessionInterface = sessionStorage.getItem("interface");
     if (!sessionInterface) {
       setFormInterface(null);
       return;
     }
-  
+
     try {
       const parsed = JSON.parse(sessionInterface);
       setFormInterface(Array.isArray(parsed?.interface) ? parsed.interface : null);
@@ -779,8 +779,8 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
       setFormInterface(null);
     }
   }, [formData]);
-  
-  
+
+
 
   function getCookie(name: string): string | null {
     const match = document.cookie.match(
@@ -1357,11 +1357,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
           handleInputChange(fieldId, next, groupId, groupIndex, item);
         };
 
-        const readOnly =
-          formData.readOnly ||
-          doesFieldHasCondition("readOnly", item, groupId, groupIndex) ||
-          executeCalculatedValueAndSetIfExists(item, groupId, groupIndex) ||
-          mode === "view";
+        const readOnly = formData.readOnly || doesFieldHasCondition("readOnly", item, groupId, groupIndex) || calcValExists || mode == "view" || mode == "portalView";
 
         return (
 
@@ -1382,7 +1378,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
               style={{
                 ...(isPrinting ? item.pdfStyles : item.webStyles),
               }}
-              readOnly={formData.readOnly || doesFieldHasCondition("readOnly", item, groupId, groupIndex) || calcValExists || mode == "view" || mode == "portalView"}
+              readOnly={readOnly}
               invalid={!!error}
               invalidText={error || ""}
               required={isRequired}
@@ -1841,11 +1837,11 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
         }
       });
     };
-  
+
     if (formData?.data?.items) {
       processItems(formData.data.items);
     }
-  
+
     return { data: payload };
   };
 
@@ -2238,7 +2234,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
       console.error("Error during print:", error);
     }
   };
- 
+
   (window as any).confirmModal = async () => {
     const message = `
     Do you want to submit this form?
@@ -2246,23 +2242,23 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
     If you answer "No", you will be able to return to this form later and enter more responses.
     If you answer "Yes", the form will no longer be editable.
     `;
-  
+
     return await new Promise<boolean>((resolve) => {
       setModalTitle("Confirmation");
       setModalMessage(message.trim());
       setPrimaryButton("Yes");
       setSecondaryButton("No");
-      primaryActionRef.current = () => { 
-        setModalOpen(false); 
+      primaryActionRef.current = () => {
+        setModalOpen(false);
         setPrimaryButton("");
         setSecondaryButton("");
-        resolve(true); 
+        resolve(true);
       };
-      secondaryActionRef.current = () => { 
-        setModalOpen(false); 
+      secondaryActionRef.current = () => {
+        setModalOpen(false);
         setPrimaryButton("");
         setSecondaryButton("");
-        resolve(false); 
+        resolve(false);
       };
       setModalOpen(true);
     });
@@ -2289,12 +2285,12 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
       const params = state ? JSON.parse(state) as Record<string, string> : {};
       const originalServer = getCookie("originalServer");
       void params;
-  
+
       const headers: Record<string, string> = {
         "Content-Type": "application/json",
         ...(originalServer ? { "X-Original-Server": originalServer } : {}),
       };
-  
+
       const endpoint = eval(action.api_path);
       const bodyFromAction = eval(`(() => ({ ${action.body} }))()`);
 
@@ -2304,34 +2300,34 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
         headers: action?.headers,
         type: action?.type,
       };
-  
-  
+
+
       const response = await fetch(endpoint, {
         method: action.type,
         headers,
         body: JSON.stringify(body),
       });
-  
+
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         console.error("API error:", errorData?.error);
         return false;
       }
-  
+
       return true;
     } catch (error) {
       console.error("API action failed:", error);
       return false;
     }
   };
-  
-  
+
+
 
   const onButtonClick = async (buttonConfig: InterfaceElement) => {
     const actions = (buttonConfig as any)?.actions || [];
     if (!Array.isArray(actions) || actions.length === 0) return;
-  
-    setModalOpen(false); 
+
+    setModalOpen(false);
     try {
       for (const action of actions) {
         if (action.action_type === "javascript") {
@@ -2340,7 +2336,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
         } else if (action.action_type === "endpoint") {
           setIsLoading(true);
           const succeeded = await executeApiAction(action);
-          if (!succeeded) break; 
+          if (!succeeded) break;
         } else {
           setModalTitle("Error");
           setModalMessage(`Unknown action type: ${String(action.action_type)}`);
@@ -2455,8 +2451,8 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
                     Save And Close
                   </Button>
                   <Button kind="secondary" onClick={handlePrint} className="no-print">
-                Print
-              </Button>
+                    Print
+                  </Button>
 
                 </>
               )}
@@ -2464,17 +2460,17 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
                 <>
                   <Button onClick={handleGenerate} kind="secondary" className="no-print" id="generate">
                     Generate
-                  </Button>    
+                  </Button>
                   <Button kind="secondary" onClick={handlePrint} className="no-print">
-                Print
-              </Button>              
+                    Print
+                  </Button>
                 </>
               )}
               {mode == "view" && (
-                <>        
+                <>
                   <Button kind="secondary" onClick={handlePrint} className="no-print">
-                      Print
-                  </Button>       
+                    Print
+                  </Button>
                 </>
               )}
               {(mode == "previewPortal") && (
@@ -2488,7 +2484,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
                 </>
               )}
 
-            {(mode === "portalNew" || goBack) && formInterface && (
+              {(mode === "portalNew" || goBack) && formInterface && (
                 <div className="header-buttons-only no-print">
                   {formInterface
                     .filter((btn: any) => visibleForMode(btn, mode))
@@ -2502,8 +2498,8 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
                     ))}
                 </div>
               )}
-            
-            {(mode === "portalEdit" || goBack) && formInterface && (
+
+              {(mode === "portalEdit" || goBack) && formInterface && (
                 <div className="header-buttons-only no-print">
                   {formInterface
                     .filter((btn: any) => visibleForMode(btn, mode))
@@ -2536,7 +2532,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
                   Back
                 </Button>
               )}
-              
+
             </div>
             <div className="form-title hidden-on-screen">
               <div className="header-form-id-print ">{formData.form_id}</div>
