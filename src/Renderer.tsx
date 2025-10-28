@@ -2248,12 +2248,18 @@ const handleRemoveGroupItem = (groupId: string, groupItemIndex: number) => {
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         console.error("API error:", errorData?.error);
+        setModalTitle("Error");
+        setModalMessage("A request failed.");
+        setModalOpen(true);
         return false;
       }
   
       return true;
     } catch (error) {
       console.error("API action failed:", error);
+      setModalTitle("Error");
+      setModalMessage("A request failed.");
+      setModalOpen(true);
       return false;
     }
   };
