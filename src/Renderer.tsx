@@ -114,10 +114,14 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
   const [modalOpen, setModalOpen] = useState(false);
   const [modalTitle, setModalTitle] = useState("KILN");
   const [modalMessage, setModalMessage] = useState("");
+  const [modalPrimaryButton, setPrimaryButton] = useState("");
+  const [modalSecondaryButton, setSecondaryButton] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isScriptRenderReady, setIsScriptRenderReady] = useState(false);
   const [formInterface, setFormInterface] = useState<InterfaceElement[] | null>(null);
 
+  const primaryActionRef = useRef<() => void>(() => setModalOpen(false));
+  const secondaryActionRef = useRef<() => void>(() => setModalOpen(false));
 
   // Create Initial field registration in external store
   const createFieldRegistrationWrapper = (fieldId: string, groupId?: string, groupIndex?: number) => {
@@ -988,7 +992,7 @@ const handleRemoveGroupItem = (groupId: string, groupItemIndex: number) => {
         const readOnly = formData.readOnly || 
           doesFieldHasCondition("readOnly", item, groupId, groupIndex) || 
           calcValExists || 
-          mode === "view";
+          mode === "view" || mode === "portalView";
       
         const screenInput = item.mask ? (
           <InputMask
@@ -1131,7 +1135,7 @@ const handleRemoveGroupItem = (groupId: string, groupItemIndex: number) => {
               style={{               
                 ...(isPrinting ? item.pdfStyles : item.webStyles),
               }}
-              readOnly={formData.readOnly || doesFieldHasCondition("readOnly", item, groupId, groupIndex) || calcValExists || mode == "view"}
+              readOnly={formData.readOnly || doesFieldHasCondition("readOnly", item, groupId, groupIndex) || calcValExists || mode == "view" || mode == "portalView"}
               invalid={!!error}
               invalidText={error || ""}
             />
@@ -1169,7 +1173,7 @@ const handleRemoveGroupItem = (groupId: string, groupItemIndex: number) => {
                   const isChecked = event.target.checked;
                   handleInputChange(fieldId, isChecked, groupId, groupIndex, item);
                 }}
-                readOnly={formData.readOnly || doesFieldHasCondition("readOnly", item, groupId, groupIndex) || calcValExists || mode == "view"}
+                readOnly={formData.readOnly || doesFieldHasCondition("readOnly", item, groupId, groupIndex) || calcValExists || mode == "view" || mode == "portalView"}
                 invalid={!!error}
                 invalidText={error || ""}
               />
@@ -1214,7 +1218,7 @@ const handleRemoveGroupItem = (groupId: string, groupItemIndex: number) => {
               onToggle={(checked: boolean) =>
                 handleInputChange(fieldId, checked, groupId, groupIndex, item)
               }
-              readOnly={formData.readOnly || doesFieldHasCondition("readOnly", item, groupId, groupIndex) || calcValExists || mode == "view"}
+              readOnly={formData.readOnly || doesFieldHasCondition("readOnly", item, groupId, groupIndex) || calcValExists || mode == "view" || mode == "portalView"}
               invalid={!!error}
               invalidText={error || ""}
               
@@ -1266,7 +1270,7 @@ const handleRemoveGroupItem = (groupId: string, groupItemIndex: number) => {
                 ...(isPrinting ? item.pdfStyles : item.webStyles),
               }}
               dateFormat={dateFormat}
-              readOnly={formData.readOnly || doesFieldHasCondition("readOnly", item, groupId, groupIndex) || calcValExists || mode == "view"}
+              readOnly={formData.readOnly || doesFieldHasCondition("readOnly", item, groupId, groupIndex) || calcValExists || mode == "view" || mode == "portalView"}
               invalid={!!error}
               invalidText={error || ""}
 
@@ -1275,7 +1279,7 @@ const handleRemoveGroupItem = (groupId: string, groupItemIndex: number) => {
                 id={fieldId}
                 placeholder={item.placeholder}
                 labelText={label}
-                readOnly={formData.readOnly || doesFieldHasCondition("readOnly", item, groupId, groupIndex) || calcValExists || mode == "view"}
+                readOnly={formData.readOnly || doesFieldHasCondition("readOnly", item, groupId, groupIndex) || calcValExists || mode == "view" || mode == "portalView"}
                 invalid={!!error}
                 invalidText={error || ""}
                 helperText={item.helperText}
@@ -1324,7 +1328,7 @@ const handleRemoveGroupItem = (groupId: string, groupItemIndex: number) => {
               style={{                
                 ...(isPrinting ? item.pdfStyles : item.webStyles),
               }}
-              readOnly={formData.readOnly || doesFieldHasCondition("readOnly", item, groupId, groupIndex) || calcValExists || mode == "view"}
+              readOnly={formData.readOnly || doesFieldHasCondition("readOnly", item, groupId, groupIndex) || calcValExists || mode == "view" || mode == "portalView"}
               invalid={!!error}
               invalidText={error || ""}
               
@@ -1485,7 +1489,7 @@ const handleRemoveGroupItem = (groupId: string, groupItemIndex: number) => {
                     ? groupStates[groupId]?.[groupIndex!]?.[fieldId]
                     : formStates[fieldId]
                 }
-                readOnly={formData.readOnly || doesFieldHasCondition("readOnly", item, groupId, groupIndex) || calcValExists || mode == "view"}
+                readOnly={formData.readOnly || doesFieldHasCondition("readOnly", item, groupId, groupIndex) || calcValExists || mode == "view" || mode == "portalView"}
                 invalid={!!error}
                 invalidText={error || ""}
               >
@@ -2167,6 +2171,35 @@ const handleRemoveGroupItem = (groupId: string, groupItemIndex: number) => {
       console.error("Error during print:", error);
     }
   };
+ 
+  (window as any).confirmModal = async () => {
+    const message = `
+    Do you want to submit this form?
+  
+    If you answer "No", you will be able to return to this form later and enter more responses.
+    If you answer "Yes", the form will no longer be editable.
+    `;
+  
+    return await new Promise<boolean>((resolve) => {
+      setModalTitle("Confirmation");
+      setModalMessage(message.trim());
+      setPrimaryButton("Yes");
+      setSecondaryButton("No");
+      primaryActionRef.current = () => { 
+        setModalOpen(false); 
+        setPrimaryButton("");
+        setSecondaryButton("");
+        resolve(true); 
+      };
+      secondaryActionRef.current = () => { 
+        setModalOpen(false); 
+        setPrimaryButton("");
+        setSecondaryButton("");
+        resolve(false); 
+      };
+      setModalOpen(true);
+    });
+  };
 
   const executeJavascriptAction = async (script?: string) => {
     if (!script) return true;
@@ -2231,7 +2264,6 @@ const handleRemoveGroupItem = (groupId: string, groupItemIndex: number) => {
     const actions = (buttonConfig as any)?.actions || [];
     if (!Array.isArray(actions) || actions.length === 0) return;
   
-    setIsLoading(true);
     setModalOpen(false); 
     try {
       for (const action of actions) {
@@ -2239,6 +2271,7 @@ const handleRemoveGroupItem = (groupId: string, groupItemIndex: number) => {
           const succeeded = await executeJavascriptAction(action.script);
           if (succeeded === false) break;
         } else if (action.action_type === "endpoint") {
+          setIsLoading(true);
           const succeeded = await executeApiAction(action);
           if (!succeeded) break; 
         } else {
@@ -2468,6 +2501,10 @@ const handleRemoveGroupItem = (groupId: string, groupItemIndex: number) => {
             message={modalMessage}
             isOpen={modalOpen}
             onClose={() => setModalOpen(false)}
+            primaryText={modalPrimaryButton || undefined}
+            secondaryText={modalSecondaryButton || undefined}
+            onPrimary={() => primaryActionRef.current()}
+            onSecondary={() => secondaryActionRef.current()}
           />
           {/* Loading overlay when API call is in progress */}
           <LoadingOverlay isLoading={isLoading} message="Please wait while the form is being saved." />
