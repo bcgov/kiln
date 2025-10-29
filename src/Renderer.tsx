@@ -29,7 +29,7 @@ import {
 import DynamicTable from "./DynamicTable";
 import { parseISO, format as formatDate, parse } from "date-fns";
 import { FlexGrid } from "@carbon/react";
-import { Add, TrashCan  } from '@carbon/icons-react';
+import { Add, TrashCan } from '@carbon/icons-react';
 import InputMask from "react-input-mask";
 import { CurrencyInput } from "react-currency-mask";
 import { API } from "./utils/api";
@@ -48,10 +48,12 @@ import {
 /*creating the structure of object Item. 
 All the form elements coming in the json will of the format type Item.
 Optional attributes are denied with ?
-Typescript requires the type  to be defined*/  
-import { Template, GroupState,
+Typescript requires the type  to be defined*/
+import {
+  Template, GroupState,
   Item, SavedFieldData, FieldValue, SavedData,
-  InterfaceElement} from "./types/template";
+  InterfaceElement
+} from "./types/template";
 import ButtonRenderer from "./common/ButtonRenderer";
 
 /*
@@ -114,10 +116,14 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
   const [modalOpen, setModalOpen] = useState(false);
   const [modalTitle, setModalTitle] = useState("KILN");
   const [modalMessage, setModalMessage] = useState("");
+  const [modalPrimaryButton, setPrimaryButton] = useState("");
+  const [modalSecondaryButton, setSecondaryButton] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isScriptRenderReady, setIsScriptRenderReady] = useState(false);
   const [formInterface, setFormInterface] = useState<InterfaceElement[] | null>(null);
 
+  const primaryActionRef = useRef<() => void>(() => setModalOpen(false));
+  const secondaryActionRef = useRef<() => void>(() => setModalOpen(false));
 
   // Create Initial field registration in external store
   const createFieldRegistrationWrapper = (fieldId: string, groupId?: string, groupIndex?: number) => {
@@ -143,6 +149,15 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
       parentGroupIndex,
       createFieldRegistration: createFieldRegistrationWrapper,
     });
+  };
+
+  const getMaxLength = (item: any): number | undefined => {
+    const a = item?.attributes || {};
+    const v = (item.validation || []).find((r: any) => String(r.type).toLowerCase() === "maxlength");
+    return Number.isFinite(a.maxLength) ? a.maxLength
+      : Number.isFinite(a.maxCount) ? a.maxCount
+        : Number.isFinite(v?.value) ? v.value
+          : undefined;
   };
 
   if (!data.form_definition) {
@@ -245,8 +260,8 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
       }
     }
     if (mode != "portal" && mode != "standalone") {
-    window.addEventListener("beforeunload", handleClose);
-    return () => window.removeEventListener("beforeunload", handleClose);
+      window.addEventListener("beforeunload", handleClose);
+      return () => window.removeEventListener("beforeunload", handleClose);
     }
   })
 
@@ -259,7 +274,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
     store.clearRegistrations();
     // Update formData when new data is received
     const updatedFormData = JSON.parse(JSON.stringify(data.form_definition));
-    
+
     const initialFormStates: { [key: string]: string } = {};
     const initialGroupStates: { [key: string]: GroupState } = {};
 
@@ -268,7 +283,7 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
     It will create states for the ids to be rendered.
     */
 
-// In your useEffect initialization, update the processItemsInitially function:
+    // In your useEffect initialization, update the processItemsInitially function:
     const processItemsInitially = (items: Item[]) => {
       items.forEach((item) => {
         if (item.type === "container" && item.containerItems) {
@@ -390,51 +405,51 @@ const Renderer: React.FC<RendererProps> = ({ data, mode, goBack }) => {
     setIsScriptRenderReady(true);
   }, [data]);
 
-// Add a ref to track if fields are already registered
-const fieldsRegisteredRef = useRef(false);
+  // Add a ref to track if fields are already registered
+  const fieldsRegisteredRef = useRef(false);
 
-useEffect(() => {
-  const items = formData?.data?.items;
-  if (!items || Object.keys(formStates).length === 0 || fieldsRegisteredRef.current) return;
-  
-  registerAllFields(items);
-  fieldsRegisteredRef.current = true;
+  useEffect(() => {
+    const items = formData?.data?.items;
+    if (!items || Object.keys(formStates).length === 0 || fieldsRegisteredRef.current) return;
 
-  const syncFields = (values: Record<string, any>) => {
-    for (const [fieldId, value] of Object.entries(values)) {
-      if (value != null && value !== "") {
-        store.setState(fieldId, value);
+    registerAllFields(items);
+    fieldsRegisteredRef.current = true;
+
+    const syncFields = (values: Record<string, any>) => {
+      for (const [fieldId, value] of Object.entries(values)) {
+        if (value != null && value !== "") {
+          store.setState(fieldId, value);
+        }
+      }
+    };
+
+    // Sync all current form values to the store
+    syncFields(formStates);
+    for (const groupArray of Object.values(groupStates)) {
+      if (Array.isArray(groupArray)) {
+        groupArray.forEach(syncFields);
       }
     }
-  };
 
-  // Sync all current form values to the store
-  syncFields(formStates);
-  for (const groupArray of Object.values(groupStates)) {
-    if (Array.isArray(groupArray)) {
+    store.initializeExternalScript();
+  }, [formData?.data?.items]);
+
+  // Add a separate effect for syncing state changes
+  useEffect(() => {
+    if (!fieldsRegisteredRef.current) return;
+
+    // Only sync values, don't re-register
+    const syncFields = (values: Record<string, any>) => {
+      for (const [fieldId, value] of Object.entries(values)) {
+        store.setState(fieldId, value);
+      }
+    };
+
+    syncFields(formStates);
+    for (const groupArray of Object.values(groupStates)) {
       groupArray.forEach(syncFields);
     }
-  }
-
-  store.initializeExternalScript();
-}, [formData?.data?.items]);
-
-// Add a separate effect for syncing state changes
-useEffect(() => {
-  if (!fieldsRegisteredRef.current) return;
-  
-  // Only sync values, don't re-register
-  const syncFields = (values: Record<string, any>) => {
-    for (const [fieldId, value] of Object.entries(values)) {
-      store.setState(fieldId, value);
-    }
-  };
-
-  syncFields(formStates);
-  for (const groupArray of Object.values(groupStates)) {
-    groupArray.forEach(syncFields);
-  }
-}, [formStates, groupStates]);
+  }, [formStates, groupStates]);
 
 
   /*
@@ -576,7 +591,7 @@ useEffect(() => {
     });
   };
 
-    // Recursively update groupStates for nested groups
+  // Recursively update groupStates for nested groups
   function updateNestedGroupState(
     groupStates: { [key: string]: GroupState },
     groupId: string,
@@ -611,60 +626,60 @@ useEffect(() => {
   and the groupItem based on the index passed. Also updates the index for the rest of the groupItems
   if the removed groupItem is in between indexes
   */
-const handleRemoveGroupItem = (groupId: string, groupItemIndex: number) => {
-  setFormData((prevState) => {
-    const newFormData = JSON.parse(JSON.stringify(prevState));
-    const group = newFormData?.data?.items ? findGroup(newFormData.data.items, groupId) : undefined;
+  const handleRemoveGroupItem = (groupId: string, groupItemIndex: number) => {
+    setFormData((prevState) => {
+      const newFormData = JSON.parse(JSON.stringify(prevState));
+      const group = newFormData?.data?.items ? findGroup(newFormData.data.items, groupId) : undefined;
 
-    if (group && group.groupItems && group.groupItems.length > groupItemIndex) {
-      group.groupItems.splice(groupItemIndex, 1);
+      if (group && group.groupItems && group.groupItems.length > groupItemIndex) {
+        group.groupItems.splice(groupItemIndex, 1);
 
-      // Re-index and regenerate IDs for all remaining group items
-      group.groupItems.forEach((groupItem, newIndex) => {
-        groupItem.fields.forEach((field: Item) => {
-          const templateId = (field as any).templateId || field.id;
-          field.id = generateUniqueId(groupId, newIndex, templateId);
+        // Re-index and regenerate IDs for all remaining group items
+        group.groupItems.forEach((groupItem, newIndex) => {
+          groupItem.fields.forEach((field: Item) => {
+            const templateId = (field as any).templateId || field.id;
+            field.id = generateUniqueId(groupId, newIndex, templateId);
+          });
         });
-      });
-    }
-    return newFormData;
-  });
-
-  // Update groupStates to match the new groupItems array
-  setGroupStates((prevGroupStates) => {
-    const newState = { ...prevGroupStates };
-    const prevGroupArray = newState[groupId] || [];
-    // Remove the group item state at the specified index
-    const updatedGroupArray = prevGroupArray.filter((_, idx) => idx !== groupItemIndex);
-
-    // Get the latest group definition from formData (after removal)
-    const groupDef = findGroup(formData.data.items, groupId);
-    // Defensive: fallback to previous groupDef if not found
-    const groupItems = groupDef?.groupItems || [];
-
-    // Re-index the remaining group item states to match new field IDs
-    const reindexedGroupArray = updatedGroupArray.map((groupItemState, newIndex) => {
-      const newGroupItemState: { [key: string]: string } = {};
-      const groupFields = groupItems[newIndex]?.fields || [];
-      groupFields.forEach((field: Item) => {
-        const templateId = (field as any).templateId || field.id;
-        // Find the old key in the previous state that matches this templateId
-        const oldKey = Object.keys(groupItemState).find(k => k.endsWith(`-${templateId}`));
-        if (oldKey) {
-          newGroupItemState[field.id] = groupItemState[oldKey];
-        } else {
-          newGroupItemState[field.id] = "";
-        }
-      });
-      return newGroupItemState;
+      }
+      return newFormData;
     });
 
-    return {
-      ...newState,
-      [groupId]: reindexedGroupArray,
-    };
-  });
-};
+    // Update groupStates to match the new groupItems array
+    setGroupStates((prevGroupStates) => {
+      const newState = { ...prevGroupStates };
+      const prevGroupArray = newState[groupId] || [];
+      // Remove the group item state at the specified index
+      const updatedGroupArray = prevGroupArray.filter((_, idx) => idx !== groupItemIndex);
+
+      // Get the latest group definition from formData (after removal)
+      const groupDef = findGroup(formData.data.items, groupId);
+      // Defensive: fallback to previous groupDef if not found
+      const groupItems = groupDef?.groupItems || [];
+
+      // Re-index the remaining group item states to match new field IDs
+      const reindexedGroupArray = updatedGroupArray.map((groupItemState, newIndex) => {
+        const newGroupItemState: { [key: string]: string } = {};
+        const groupFields = groupItems[newIndex]?.fields || [];
+        groupFields.forEach((field: Item) => {
+          const templateId = (field as any).templateId || field.id;
+          // Find the old key in the previous state that matches this templateId
+          const oldKey = Object.keys(groupItemState).find(k => k.endsWith(`-${templateId}`));
+          if (oldKey) {
+            newGroupItemState[field.id] = groupItemState[oldKey];
+          } else {
+            newGroupItemState[field.id] = "";
+          }
+        });
+        return newGroupItemState;
+      });
+
+      return {
+        ...newState,
+        [groupId]: reindexedGroupArray,
+      };
+    });
+  };
 
   /*
    Function to clear the fields in a group.Triggered on Clear button.
@@ -749,14 +764,14 @@ const handleRemoveGroupItem = (groupId: string, groupItemIndex: number) => {
       setFormInterface(fromFD);
       return;
     }
-  
+
     // Otherwise, try sessionStorage
     const sessionInterface = sessionStorage.getItem("interface");
     if (!sessionInterface) {
       setFormInterface(null);
       return;
     }
-  
+
     try {
       const parsed = JSON.parse(sessionInterface);
       setFormInterface(Array.isArray(parsed?.interface) ? parsed.interface : null);
@@ -764,8 +779,8 @@ const handleRemoveGroupItem = (groupId: string, groupItemIndex: number) => {
       setFormInterface(null);
     }
   }, [formData]);
-  
-  
+
+
 
   function getCookie(name: string): string | null {
     const match = document.cookie.match(
@@ -799,7 +814,7 @@ const handleRemoveGroupItem = (groupId: string, groupItemIndex: number) => {
 
     const visibilityCondition = item.conditions.find(condition => condition.type === 'visibility');
 
-    if (visibilityCondition) {  
+    if (visibilityCondition) {
       try {
         // If the field is in a group, pass groupStates and groupIndex
         if (groupId !== null && groupIndex !== null) {
@@ -812,7 +827,7 @@ const handleRemoveGroupItem = (groupId: string, groupItemIndex: number) => {
             visibilityCondition.value
           );
 
-          console.log('groupId !== null, visibilityCondition.value', visibilityCondition.value, conditionFunction(formStates, groupStates, groupId, groupIndex, isPortalIntegrated)); 
+          console.log('groupId !== null, visibilityCondition.value', visibilityCondition.value, conditionFunction(formStates, groupStates, groupId, groupIndex, isPortalIntegrated));
           return conditionFunction(formStates, groupStates, groupId, groupIndex, isPortalIntegrated);
         } else {
           // For non-group fields, evaluate using formStates
@@ -822,7 +837,7 @@ const handleRemoveGroupItem = (groupId: string, groupItemIndex: number) => {
             "isPortal",
             visibilityCondition.value
           );
-          console.log('groupId == null, visibilityCondition.value', visibilityCondition.value, conditionFunction(formStates, groupStates, isPortalIntegrated)); 
+          console.log('groupId == null, visibilityCondition.value', visibilityCondition.value, conditionFunction(formStates, groupStates, isPortalIntegrated));
           return conditionFunction(formStates, groupStates, isPortalIntegrated);
         }
       } catch (error) {
@@ -948,7 +963,7 @@ const handleRemoveGroupItem = (groupId: string, groupItemIndex: number) => {
     groupIndex: number | null = null
   ) => {
 
-    const Component = componentMapping[item.type];
+    const Component = componentMapping[item?.type];
     if (!Component) return null;
 
     const calcValExists = executeCalculatedValueAndSetIfExists(item, groupId, groupIndex);
@@ -973,23 +988,47 @@ const handleRemoveGroupItem = (groupId: string, groupItemIndex: number) => {
     if (!fieldMethods) {
       fieldMethods = createFieldRegistrationWrapper(fieldId, groupId || undefined, groupIndex || undefined);
     }
-    
+
 
     switch (item.type) {
       case "text-input": {
 
         const value = groupId
-        ? groupStates[groupId]?.[groupIndex!]?.[fieldId] || ""
-        : formStates[fieldId] || ""
-      
-        const onChange = (e: React.ChangeEvent<HTMLInputElement>) =>
-          handleInputChange(fieldId, e.target.value, groupId, groupIndex, item);
-      
-        const readOnly = formData.readOnly || 
-          doesFieldHasCondition("readOnly", item, groupId, groupIndex) || 
-          calcValExists || 
-          mode === "view";
-      
+          ? groupStates[groupId]?.[groupIndex!]?.[fieldId] || ""
+          : formStates[fieldId] || "";
+
+        const maxLength = getMaxLength(item);
+        const length = (value ?? "").length;
+        const atMax = typeof maxLength === "number" && length >= maxLength;
+
+        // Merge any existing helperText with the counter
+        const mergedHelperText =
+          typeof maxLength === "number"
+            ? [item.helperText, `${length}/${maxLength}${atMax ? " (max reached)" : ""}`]
+              .filter(Boolean)
+              .join(" · ")
+            : item.helperText;
+        const isRequired = isFieldRequired(item.validation || []);
+
+        const onChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+          let next = e.target.value;
+          if (typeof maxLength === "number" && next.length > maxLength) {
+            next = next.slice(0, maxLength);
+          }
+          handleInputChange(fieldId, next, groupId, groupIndex, item);
+        }
+
+
+        const readOnly = formData.readOnly ||
+          doesFieldHasCondition("readOnly", item, groupId, groupIndex) ||
+          calcValExists ||
+          mode === "view" || mode === "portalView";
+
+        const validationProps = {
+          required: isRequired,
+          ...(typeof maxLength === "number" ? { maxLength } : {}),
+        };
+
         const screenInput = item.mask ? (
           <InputMask
             className="field-container no-print"
@@ -997,45 +1036,48 @@ const handleRemoveGroupItem = (groupId: string, groupItemIndex: number) => {
             {...item.attributes}
             value={value}
             onChange={onChange}
-            readOnly={readOnly}  
+            readOnly={readOnly}
           >
             <Component
-              className="field-container no-print"
+              className={`field-container no-print ${atMax ? "at-max" : ""}`}
               key={fieldId}
               id={fieldId}
               labelText={label}
               placeholder={item.placeholder}
-              helperText={item.helperText}
+              helperText={mergedHelperText}
               name={fieldId}
-              style={{                
+              style={{
                 ...(isPrinting ? item.pdfStyles : item.webStyles),
               }}
               invalid={!!error}
               invalidText={error || ""}
               {...item.attributes}
+              {...validationProps}
+              onBlur={() => handleInputChange(fieldId, value, groupId, groupIndex, item)}
             />
           </InputMask>
         ) : (
           <Component
-            className="field-container no-print"
+            className={`field-container no-print ${atMax ? "at-max" : ""}`}
             key={fieldId}
             id={fieldId}
             {...item.attributes}
+            {...validationProps}
             value={value}
             onChange={onChange}
             readOnly={readOnly}
             labelText={label}
             placeholder={item.placeholder}
-            helperText={item.helperText}
+            helperText={mergedHelperText}
             name={fieldId}
-            style={{                
+            style={{
               ...(isPrinting ? item.pdfStyles : item.webStyles),
             }}
             invalid={!!error}
             invalidText={error || ""}
-            
+            onBlur={() => handleInputChange(fieldId, value, groupId, groupIndex, item)}
           />
-        );  
+        );
         return (
           <>
             {screenInput}
@@ -1051,11 +1093,11 @@ const handleRemoveGroupItem = (groupId: string, groupItemIndex: number) => {
             </div>
           </>
         );
-      }    
+      }
       case "currency-input":
         return (
           <CurrencyInput
-          {...item.attributes}
+            {...item.attributes}
             value={
               groupId
                 ? groupStates[groupId]?.[groupIndex!]?.[fieldId] || ""
@@ -1083,7 +1125,7 @@ const handleRemoveGroupItem = (groupId: string, groupItemIndex: number) => {
                 labelText={label}
                 placeholder={item.placeholder}
                 name={fieldId}
-                style={{                  
+                style={{
                   ...(isPrinting ? item.pdfStyles : item.webStyles),
                 }}
                 invalid={!!error}
@@ -1111,7 +1153,7 @@ const handleRemoveGroupItem = (groupId: string, groupItemIndex: number) => {
         return (
           <>
             <Component
-            {...item.attributes}
+              {...item.attributes}
               key={fieldId}
               id={fieldId}
               titleText={label}
@@ -1128,10 +1170,10 @@ const handleRemoveGroupItem = (groupId: string, groupItemIndex: number) => {
                   groupIndex, item
                 )
               }
-              style={{               
+              style={{
                 ...(isPrinting ? item.pdfStyles : item.webStyles),
               }}
-              readOnly={formData.readOnly || doesFieldHasCondition("readOnly", item, groupId, groupIndex) || calcValExists || mode == "view"}
+              readOnly={formData.readOnly || doesFieldHasCondition("readOnly", item, groupId, groupIndex) || calcValExists || mode == "view" || mode == "portalView"}
               invalid={!!error}
               invalidText={error || ""}
             />
@@ -1155,7 +1197,7 @@ const handleRemoveGroupItem = (groupId: string, groupItemIndex: number) => {
         return (
 
           <>
-            <div style={{              
+            <div style={{
               ...(isPrinting ? item.pdfStyles : item.webStyles),
             }}>
               <Component
@@ -1169,7 +1211,7 @@ const handleRemoveGroupItem = (groupId: string, groupItemIndex: number) => {
                   const isChecked = event.target.checked;
                   handleInputChange(fieldId, isChecked, groupId, groupIndex, item);
                 }}
-                readOnly={formData.readOnly || doesFieldHasCondition("readOnly", item, groupId, groupIndex) || calcValExists || mode == "view"}
+                readOnly={formData.readOnly || doesFieldHasCondition("readOnly", item, groupId, groupIndex) || calcValExists || mode == "view" || mode == "portalView"}
                 invalid={!!error}
                 invalidText={error || ""}
               />
@@ -1182,12 +1224,12 @@ const handleRemoveGroupItem = (groupId: string, groupItemIndex: number) => {
               </div>
 
               <div className="field_value-wrapper-print" >
-              {
-                (groupId
-                  ? groupStates[groupId]?.[groupIndex!]?.[fieldId]
-                  : formStates[fieldId]
-                ) ? <span>☑</span> : <span>☐</span>
-              }                                 
+                {
+                  (groupId
+                    ? groupStates[groupId]?.[groupIndex!]?.[fieldId]
+                    : formStates[fieldId]
+                  ) ? <span>☑</span> : <span>☐</span>
+                }
               </div>
             </div>
           </>
@@ -1214,10 +1256,10 @@ const handleRemoveGroupItem = (groupId: string, groupItemIndex: number) => {
               onToggle={(checked: boolean) =>
                 handleInputChange(fieldId, checked, groupId, groupIndex, item)
               }
-              readOnly={formData.readOnly || doesFieldHasCondition("readOnly", item, groupId, groupIndex) || calcValExists || mode == "view"}
+              readOnly={formData.readOnly || doesFieldHasCondition("readOnly", item, groupId, groupIndex) || calcValExists || mode == "view" || mode == "portalView"}
               invalid={!!error}
               invalidText={error || ""}
-              
+
             />
           </div>
         );
@@ -1262,11 +1304,11 @@ const handleRemoveGroupItem = (groupId: string, groupItemIndex: number) => {
                   );
                 }
               }}
-              style={{                
+              style={{
                 ...(isPrinting ? item.pdfStyles : item.webStyles),
               }}
               dateFormat={dateFormat}
-              readOnly={formData.readOnly || doesFieldHasCondition("readOnly", item, groupId, groupIndex) || calcValExists || mode == "view"}
+              readOnly={formData.readOnly || doesFieldHasCondition("readOnly", item, groupId, groupIndex) || calcValExists || mode == "view" || mode == "portalView"}
               invalid={!!error}
               invalidText={error || ""}
 
@@ -1275,7 +1317,7 @@ const handleRemoveGroupItem = (groupId: string, groupItemIndex: number) => {
                 id={fieldId}
                 placeholder={item.placeholder}
                 labelText={label}
-                readOnly={formData.readOnly || doesFieldHasCondition("readOnly", item, groupId, groupIndex) || calcValExists || mode == "view"}
+                readOnly={formData.readOnly || doesFieldHasCondition("readOnly", item, groupId, groupIndex) || calcValExists || mode == "view" || mode == "portalView"}
                 invalid={!!error}
                 invalidText={error || ""}
                 helperText={item.helperText}
@@ -1300,11 +1342,28 @@ const handleRemoveGroupItem = (groupId: string, groupItemIndex: number) => {
           </>
         );
       case "text-area":
+        const value =
+          groupId
+            ? groupStates[groupId]?.[groupIndex!]?.[fieldId] || ""
+            : formStates[fieldId] || "";
+        const maxLength = getMaxLength(item);
+        const isRequired = isFieldRequired(item.validation || []);
+
+        const onChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+          let next = e.target.value;
+          if (typeof maxLength === "number" && next.length > maxLength) {
+            next = next.slice(0, maxLength);
+          }
+          handleInputChange(fieldId, next, groupId, groupIndex, item);
+        };
+
+        const readOnly = formData.readOnly || doesFieldHasCondition("readOnly", item, groupId, groupIndex) || executeCalculatedValueAndSetIfExists(item, groupId, groupIndex) || calcValExists || mode == "view" || mode == "portalView";
+
         return (
 
           <>
             <Component
-            {...item.attributes}
+              {...item.attributes}
               key={fieldId}
               className="field-container no-print"
               id={fieldId}
@@ -1312,22 +1371,18 @@ const handleRemoveGroupItem = (groupId: string, groupItemIndex: number) => {
               placeholder={item.placeholder}
               helperText={item.helperText}
               name={fieldId}
-              value={
-                groupId
-                  ? groupStates[groupId]?.[groupIndex!]?.[fieldId] || ""
-                  : formStates[fieldId] || ""
-              }
-              onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
-                handleInputChange(fieldId, e.target.value, groupId, groupIndex, item)
-              }
+              value={value}
+              onChange={onChange}
+              onBlur={() => handleInputChange(fieldId, value, groupId, groupIndex, item)}
               rows={4}
-              style={{                
+              style={{
                 ...(isPrinting ? item.pdfStyles : item.webStyles),
               }}
-              readOnly={formData.readOnly || doesFieldHasCondition("readOnly", item, groupId, groupIndex) || calcValExists || mode == "view"}
+              readOnly={readOnly}
               invalid={!!error}
               invalidText={error || ""}
-              
+              required={isRequired}
+              {...(typeof maxLength === "number" ? { maxLength } : {})}
             />
             <div className="hidden-on-screen field-wrapper-print text-area" style={{
               ...(isPrinting ? item.pdfStyles : item.webStyles),
@@ -1337,11 +1392,7 @@ const handleRemoveGroupItem = (groupId: string, groupItemIndex: number) => {
               </div>
 
               <div className="field_value-wrapper-print">
-                {
-                  groupId
-                    ? groupStates[groupId]?.[groupIndex!]?.[fieldId] || ""
-                    : formStates[fieldId] || ""
-                }
+                {value}
               </div>
             </div>
           </>
@@ -1349,7 +1400,7 @@ const handleRemoveGroupItem = (groupId: string, groupItemIndex: number) => {
       case "button":
         return (
           <Component
-          {...item.attributes}
+            {...item.attributes}
             key={fieldId}
             id={fieldId}
             name={fieldId}
@@ -1363,7 +1414,7 @@ const handleRemoveGroupItem = (groupId: string, groupItemIndex: number) => {
                 item
               )
             }
-            style={{              
+            style={{
               ...(isPrinting ? item.pdfStyles : item.webStyles),
             }}
           >
@@ -1373,7 +1424,7 @@ const handleRemoveGroupItem = (groupId: string, groupItemIndex: number) => {
       case "number-input":
         return (
           <Component
-          {...item.attributes}
+            {...item.attributes}
             helperText={item.helperText}
             key={fieldId}
             id={fieldId}
@@ -1403,12 +1454,13 @@ const handleRemoveGroupItem = (groupId: string, groupItemIndex: number) => {
           />
         );
       case "text-info":
-        const textInfo = item?.attributes?.content || item?.value ||"";
+        const textInfo = item?.attributes?.content || item?.value || "";
         return (
 
           <Component
             className="text-block field-container"
-            style={{...(isPrinting ? item.pdfStyles : item.webStyles),
+            style={{
+              ...(isPrinting ? item.pdfStyles : item.webStyles),
             }}
             key={fieldId}
             id={fieldId}
@@ -1427,7 +1479,7 @@ const handleRemoveGroupItem = (groupId: string, groupItemIndex: number) => {
         return (
           <div className="cds--file__container">
             <Component
-            {...item.attributes}
+              {...item.attributes}
               id={fieldId}
               labelTitle={item.labelText}
               labelDescription={item.labelDescription}
@@ -1446,7 +1498,7 @@ const handleRemoveGroupItem = (groupId: string, groupItemIndex: number) => {
       case "table":
         return (
           <Component
-          {...item.attributes}
+            {...item.attributes}
             id={fieldId}
             tableTitle={item.labelText}
             initialRows={item.initialRows}
@@ -1485,7 +1537,7 @@ const handleRemoveGroupItem = (groupId: string, groupItemIndex: number) => {
                     ? groupStates[groupId]?.[groupIndex!]?.[fieldId]
                     : formStates[fieldId]
                 }
-                readOnly={formData.readOnly || doesFieldHasCondition("readOnly", item, groupId, groupIndex) || calcValExists || mode == "view"}
+                readOnly={formData.readOnly || doesFieldHasCondition("readOnly", item, groupId, groupIndex) || calcValExists || mode == "view" || mode == "portalView"}
                 invalid={!!error}
                 invalidText={error || ""}
               >
@@ -1573,11 +1625,11 @@ const handleRemoveGroupItem = (groupId: string, groupItemIndex: number) => {
         );
       case "group":
         return (
-          <div key={item.id} className="group-container" 
-          {...item.attributes}
+          <div key={item.id} className="group-container"
+            {...item.attributes}
           >
             <div className="group-header">{item.repeater && item.label}</div>
-            {item.groupItems?.map((groupItem, groupIndex) => (
+            {item?.groupItems?.map((groupItem, groupIndex) => (
               <div key={`${item.id}-${groupIndex}`} className="group-item-container">
                 {item.repeater && (<div className="group-item-header">
                   {item.repeaterItemLabel || item.label}
@@ -1646,13 +1698,13 @@ const handleRemoveGroupItem = (groupId: string, groupItemIndex: number) => {
 
         return (
           <>
-            <div key={item.id}
-              id={item.id}
+            <div key={item?.id}
+              id={item?.id}
               className={item?.attributes?.containerType == 'page' ? "page-container" : item?.attributes?.containerType == 'section' ? "section-container" : "common-container"}
               style={{
-                ...(isPrinting ? item.pdfStyles : item.webStyles),
+                ...(isPrinting ? item?.pdfStyles : item?.webStyles),
               }}
-              {...item.attributes}
+              {...item?.attributes}
             >
               <div className="group-header"
                 style={{
@@ -1661,19 +1713,19 @@ const handleRemoveGroupItem = (groupId: string, groupItemIndex: number) => {
                   justifyContent: 'space-between',
                 }}
               >
-                {item.label}
-                {item.containerItems && item.clear_button && (mode == "edit" || goBack) && formData.readOnly != true && (
+                {item?.label}
+                {item?.containerItems && item?.clear_button && (mode == "edit" || goBack) && formData.readOnly != true && (
                   <div className="custom-buttons-no-bg no-print">
                     <Button
                       kind="ghost"
-                      onClick={() => handleClearContainer(item.id)}
+                      onClick={() => handleClearContainer(item?.id)}
                       className="no-print"
                     >
                       Clear
                     </Button>
                   </div>
                 )}</div>
-              {item.containerItems?.filter(containerItem => !isHidden(containerItem)).map((containerItem) => (
+              {item?.containerItems?.filter(containerItem => !isHidden(containerItem)).map((containerItem) => (
                 <div
                   key={containerItem.id}
                   style={applyWrapperStyles(containerItem)}
@@ -1684,7 +1736,7 @@ const handleRemoveGroupItem = (groupId: string, groupItemIndex: number) => {
               ))}
             </div>
           </>
-        );        
+        );
       default:
         return null;
     }
@@ -1750,17 +1802,17 @@ const handleRemoveGroupItem = (groupId: string, groupItemIndex: number) => {
 
   const buildPdfPayload = () => {
     const payload: Record<string, any> = {};
-  
+
     // recursively walk items 
     const processItems = (items: Item[]) => {
       items.forEach(item => {
         // skip anything hidden
         if (!isFieldVisible(item)) return;
-  
+
         if (item.type === "container" && item.containerItems) {
           // dive into container
           processItems(item.containerItems);
-  
+
         } else if (item.type === "group") {
           // only include the group itself if it's visible
           const rows = (groupStates[item.id] || [])
@@ -1774,20 +1826,22 @@ const handleRemoveGroupItem = (groupId: string, groupItemIndex: number) => {
               return rowPayload;
             })
             .filter(r => Object.keys(r).length > 0);
-  
+
           if (rows.length) {
             payload[item.id] = rows;
           }
-  
+
         } else {
           // simple field
           payload[item.id] = formStates[item.id];
         }
       });
     };
-  
-    processItems(formData.data.items);
-  
+
+    if (formData?.data?.items) {
+      processItems(formData.data.items);
+    }
+
     return { data: payload };
   };
 
@@ -1801,7 +1855,7 @@ const handleRemoveGroupItem = (groupId: string, groupItemIndex: number) => {
     try {
       const saveDataICMEndpoint = API.saveICMData;
       const state = sessionStorage.getItem("formParams");
-      const params = state ? (JSON.parse(state) as Record<string,string>) : {};
+      const params = state ? (JSON.parse(state) as Record<string, string>) : {};
       const token = keycloak?.token ?? null;
       const savedJson: Record<string, any> = {
         "attachmentId": params["attachmentId"],
@@ -1834,7 +1888,7 @@ const handleRemoveGroupItem = (groupId: string, groupItemIndex: number) => {
       } else {
         const errorData = await response.json(); // Parse error response        
         //throw new Error(errorData.error || "Something went wrong");
-        console.error("Error:",errorData.error);
+        console.error("Error:", errorData.error);
         return errorData?.error || "Error saving form. Please try again.";
       }
     } catch (error) {
@@ -1846,7 +1900,7 @@ const handleRemoveGroupItem = (groupId: string, groupItemIndex: number) => {
   const saveDataToICMForGenerate = async () => {
     try {
       const saveDataICMEndpoint = API.saveICMData;
-     
+
       const savedJson: Record<string, any> = {
         "attachmentId": data.params.attachmentId,
         "OfficeName": data.params.OfficeName,
@@ -1854,13 +1908,13 @@ const handleRemoveGroupItem = (groupId: string, groupItemIndex: number) => {
         //"username": "test",
         "savedForm": JSON.stringify(createSavedData())
       };
-            
+
       const originalServer = new URL(data.params.apiHost).hostname;
 
       const headers: Record<string, string> = {
         "Content-Type": "application/json",
         ...(originalServer && { "X-Original-Server": originalServer })
-      };  
+      };
 
       const response = await fetch(saveDataICMEndpoint, {
         method: "POST",
@@ -1874,7 +1928,7 @@ const handleRemoveGroupItem = (groupId: string, groupItemIndex: number) => {
       } else {
         const errorData = await response.json(); // Parse error response        
         //throw new Error(errorData.error || "Something went wrong");
-        console.error("Error:",errorData.error);
+        console.error("Error:", errorData.error);
         return errorData?.error || "Error saving form. Please try again.";
       }
     } catch (error) {
@@ -1940,6 +1994,21 @@ const handleRemoveGroupItem = (groupId: string, groupItemIndex: number) => {
     return isValid;
   };
 
+  // Run a one-time initial validation on preview pages
+  const didInitialPreviewValidate = React.useRef(false);
+
+  useEffect(() => {
+    const inPreview = mode === "preview" || mode === "previewPortal";
+    const haveItems = !!formData?.data?.items?.length;
+    // wait until state is hydrated so required/visibility checks are correct
+    const haveState = Object.keys(formStates).length > 0 || Object.keys(groupStates).length > 0;
+
+    if (inPreview && haveItems && haveState && !didInitialPreviewValidate.current) {
+      validateAllFields();
+      didInitialPreviewValidate.current = true;
+    }
+  }, [mode, formData, formStates, groupStates]);
+
   /*
   Call to end point for unlock flags in ICM
   */
@@ -1948,7 +2017,7 @@ const handleRemoveGroupItem = (groupId: string, groupItemIndex: number) => {
 
       const unlockICMFinalEdpoint = API.unlockICMData;
       const state = sessionStorage.getItem("formParams");
-      const params = state ? (JSON.parse(state) as Record<string,string>) : {};
+      const params = state ? (JSON.parse(state) as Record<string, string>) : {};
       const token = keycloak?.token ?? null;
 
       const body: Record<string, any> = { ...params };
@@ -1995,7 +2064,7 @@ const handleRemoveGroupItem = (groupId: string, groupItemIndex: number) => {
     setModalOpen(false); // Ensure modal is closed when a new request starts
     try {
       if (validateAllFields()) {
-        const returnMessage =await saveDataToICMApi();
+        const returnMessage = await saveDataToICMApi();
         if ((returnMessage) === "success") {
           setModalTitle("Success ✅");
           setModalMessage("Form Saved Successfully.");
@@ -2071,7 +2140,7 @@ const handleRemoveGroupItem = (groupId: string, groupItemIndex: number) => {
   */
 
   const handlePrint = async () => {
-    
+
     const pdfId = formData.pdf_template_id;
     const PDFTemplateEndpoint = API.pdfTemplate;
 
@@ -2134,20 +2203,20 @@ const handleRemoveGroupItem = (groupId: string, groupItemIndex: number) => {
       const formFooter = formData?.form_id && formData?.title
         ? formData.form_id + " - " + formData.title + (extraFooterInfo ? " - " + extraFooterInfo : "")
         : "Unknown Form ID";
-    
-        // Set these values as attributes on the <body> tag
+
+      // Set these values as attributes on the <body> tag
       document.documentElement.setAttribute("data-form-id", formFooter);
-         
-    /*Generate the creation date dynamically
-    const creationDate = new Date().toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    });
-    // Set these values as attributes on the <body> tag
-   
-    document.documentElement.setAttribute("data-date", creationDate);*/
-  
+
+      /*Generate the creation date dynamically
+      const creationDate = new Date().toLocaleDateString("en-US", {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      });
+      // Set these values as attributes on the <body> tag
+     
+      document.documentElement.setAttribute("data-date", creationDate);*/
+
       setTimeout(() => {
         window.print();
       }, 150); // Ensure styles are applied before printing
@@ -2164,6 +2233,35 @@ const handleRemoveGroupItem = (groupId: string, groupItemIndex: number) => {
     } catch (error) {
       console.error("Error during print:", error);
     }
+  };
+
+  (window as any).confirmModal = async () => {
+    const message = `
+    Do you want to submit this form?
+  
+    If you answer "No", you will be able to return to this form later and enter more responses.
+    If you answer "Yes", the form will no longer be editable.
+    `;
+
+    return await new Promise<boolean>((resolve) => {
+      setModalTitle("Confirmation");
+      setModalMessage(message.trim());
+      setPrimaryButton("Yes");
+      setSecondaryButton("No");
+      primaryActionRef.current = () => {
+        setModalOpen(false);
+        setPrimaryButton("");
+        setSecondaryButton("");
+        resolve(true);
+      };
+      secondaryActionRef.current = () => {
+        setModalOpen(false);
+        setPrimaryButton("");
+        setSecondaryButton("");
+        resolve(false);
+      };
+      setModalOpen(true);
+    });
   };
 
   const executeJavascriptAction = async (script?: string) => {
@@ -2187,12 +2285,12 @@ const handleRemoveGroupItem = (groupId: string, groupItemIndex: number) => {
       const params = state ? JSON.parse(state) as Record<string, string> : {};
       const originalServer = getCookie("originalServer");
       void params;
-  
+
       const headers: Record<string, string> = {
         "Content-Type": "application/json",
         ...(originalServer ? { "X-Original-Server": originalServer } : {}),
       };
-  
+
       const endpoint = eval(action.api_path);
       const bodyFromAction = eval(`(() => ({ ${action.body} }))()`);
 
@@ -2202,43 +2300,49 @@ const handleRemoveGroupItem = (groupId: string, groupItemIndex: number) => {
         headers: action?.headers,
         type: action?.type,
       };
-  
-  
+
+
       const response = await fetch(endpoint, {
         method: action.type,
         headers,
         body: JSON.stringify(body),
       });
-  
+
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         console.error("API error:", errorData?.error);
+        setModalTitle("Error");
+        setModalMessage("A request failed.");
+        setModalOpen(true);
         return false;
       }
-  
+
       return true;
     } catch (error) {
       console.error("API action failed:", error);
+      setModalTitle("Error");
+      setModalMessage("A request failed.");
+      setModalOpen(true);
       return false;
     }
   };
-  
-  
+
+
 
   const onButtonClick = async (buttonConfig: InterfaceElement) => {
     const actions = (buttonConfig as any)?.actions || [];
     if (!Array.isArray(actions) || actions.length === 0) return;
-  
-    setIsLoading(true);
-    setModalOpen(false); 
+
+    setModalOpen(false);
     try {
       for (const action of actions) {
         if (action.action_type === "javascript") {
           const succeeded = await executeJavascriptAction(action.script);
           if (succeeded === false) break;
         } else if (action.action_type === "endpoint") {
+          setIsLoading(true);
           const succeeded = await executeApiAction(action);
-          if (!succeeded) break; 
+          if (!succeeded) break;
         } else {
           setModalTitle("Error");
           setModalMessage(`Unknown action type: ${String(action.action_type)}`);
@@ -2291,25 +2395,30 @@ const handleRemoveGroupItem = (groupId: string, groupItemIndex: number) => {
   };
 
   const handleCancel = async () => {
-    window.parent.postMessage (JSON.stringify({"event": "cancel"}), "*");
+    window.parent.postMessage(JSON.stringify({ "event": "cancel" }), "*");
   }
   const handleSubmit = async () => {
-    window.parent.postMessage (JSON.stringify({"event": "submit"}), "*");
+    window.parent.postMessage(JSON.stringify({ "event": "submit" }), "*");
   }
   const handleGenerate = async () => {
     setIsLoading(true); // Show loading overlay
     setModalOpen(false); // Ensure modal is closed when a new request starts
-    try {      
-        const returnMessage =await saveDataToICMForGenerate();
-        if ((returnMessage) === "success") {
-          setModalTitle("Success ✅");
-          setModalMessage("Form Saved Successfully.");
-        } else {
-          setModalTitle("Error ❌ ");
-          setModalMessage(returnMessage);
-        }
+    try {
+      if (!validateAllFields()) {
+        setModalTitle("Validation Error ❌");
+        setModalMessage("Please clear the errors in the form before generating.");
         setModalOpen(true);
-      
+        return;
+      }
+      const returnMessage = await saveDataToICMForGenerate();
+      if ((returnMessage) === "success") {
+        setModalTitle("Success ✅");
+        setModalMessage("Form Saved Successfully.");
+      } else {
+        setModalTitle("Error ❌ ");
+        setModalMessage(returnMessage);
+      }
+      setModalOpen(true);
     } catch (error) {
       setModalTitle("Error ❌ ");
       setModalMessage("Error saving form. Please try again.");
@@ -2348,8 +2457,8 @@ const handleRemoveGroupItem = (groupId: string, groupItemIndex: number) => {
                     Save And Close
                   </Button>
                   <Button kind="secondary" onClick={handlePrint} className="no-print">
-                Print
-              </Button>
+                    Print
+                  </Button>
 
                 </>
               )}
@@ -2357,31 +2466,31 @@ const handleRemoveGroupItem = (groupId: string, groupItemIndex: number) => {
                 <>
                   <Button onClick={handleGenerate} kind="secondary" className="no-print" id="generate">
                     Generate
-                  </Button>    
+                  </Button>
                   <Button kind="secondary" onClick={handlePrint} className="no-print">
-                Print
-              </Button>              
+                    Print
+                  </Button>
                 </>
               )}
               {mode == "view" && (
-                <>        
+                <>
                   <Button kind="secondary" onClick={handlePrint} className="no-print">
-                      Print
-                  </Button>       
+                    Print
+                  </Button>
                 </>
               )}
               {(mode == "previewPortal") && (
                 <>
-                <Button onClick={handleCancel} kind="secondary" className="no-print" id="generate">
-                  Cancel
-                </Button>      
-                <Button onClick={handleSubmit} kind="secondary" className="no-print" id="generate">
-                  Submit
-                </Button>             
-              </>
-            )}
+                  <Button onClick={handleCancel} kind="secondary" className="no-print" id="generate">
+                    Cancel
+                  </Button>
+                  <Button onClick={handleSubmit} kind="secondary" className="no-print" id="generate">
+                    Submit
+                  </Button>
+                </>
+              )}
 
-            {(mode === "portalNew" || goBack) && formInterface && (
+              {(mode === "portalNew" || goBack) && formInterface && (
                 <div className="header-buttons-only no-print">
                   {formInterface
                     .filter((btn: any) => visibleForMode(btn, mode))
@@ -2395,8 +2504,8 @@ const handleRemoveGroupItem = (groupId: string, groupItemIndex: number) => {
                     ))}
                 </div>
               )}
-            
-            {(mode === "portalEdit" || goBack) && formInterface && (
+
+              {(mode === "portalEdit" || goBack) && formInterface && (
                 <div className="header-buttons-only no-print">
                   {formInterface
                     .filter((btn: any) => visibleForMode(btn, mode))
@@ -2429,7 +2538,7 @@ const handleRemoveGroupItem = (groupId: string, groupItemIndex: number) => {
                   Back
                 </Button>
               )}
-              
+
             </div>
             <div className="form-title hidden-on-screen">
               <div className="header-form-id-print ">{formData.form_id}</div>
@@ -2444,14 +2553,14 @@ const handleRemoveGroupItem = (groupId: string, groupItemIndex: number) => {
       </div>
       <div className="header-form-id no-print">
         <div className="form-id-section">
-        {formData.form_id}
+          {formData.form_id}
         </div>
       </div>
       <div className="scrollable-content">
         <div className="header-section">
           <div className="header-title-buttons">
             <div className="header-title-only no-print" >
-            {formData.title} {goBack && (<span>(Preview)</span>)}
+              {formData.title} {goBack && (<span>(Preview)</span>)}
             </div>
 
           </div>
@@ -2466,21 +2575,25 @@ const handleRemoveGroupItem = (groupId: string, groupItemIndex: number) => {
             message={modalMessage}
             isOpen={modalOpen}
             onClose={() => setModalOpen(false)}
+            primaryText={modalPrimaryButton || undefined}
+            secondaryText={modalSecondaryButton || undefined}
+            onPrimary={() => primaryActionRef.current()}
+            onSecondary={() => secondaryActionRef.current()}
           />
           {/* Loading overlay when API call is in progress */}
           <LoadingOverlay isLoading={isLoading} message="Please wait while the form is being saved." />
           <FlexGrid>
             <Row >
-              {formData.data.items.filter(item => !isHidden(item)).map(item => (
+              {formData?.data?.items?.filter(item => !isHidden(item)).map(item => (
                 <div
-                  key={item.id}
+                  key={item?.id}
                   style={applyWrapperStyles(item)}
-                  data-print-columns={item.pdfStyles?.printColumns || 4}
+                  data-print-columns={item?.pdfStyles?.printColumns || 4}
                 >
                   {renderComponent(item)}
                 </div>
               ))}
-            </Row>            
+            </Row>
           </FlexGrid>
         </div>
       </div>

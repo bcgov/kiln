@@ -53,7 +53,7 @@ const transformApiResponse = (apiData: ApiDataResponse): FormData => {
     data:
       apiData.data?.items?.reduce<Record<string, string>>(
         (acc, item: ApiDataItem) => {
-          if (item.id) {
+          if (item?.id) {
             acc[item.id] = item.value || "";
           }
           return acc;
